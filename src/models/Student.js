@@ -3,15 +3,13 @@ import { INSCRIPTION } from '../config/constants.js';
 
 const representativeSchema = new mongoose.Schema(
   {
-    name: String,
-    ci: String,
-    phone: String,
-    email: String,
-    relationship: String,
+
     // Campos del formulario (representante legal)
     nombres: { type: String, trim: true },
     apellidos: { type: String, trim: true },
     cedula: { type: String, trim: true },
+    phone: { type: String, trim: true },
+    email: { type: String, trim: true },
     parentezco: { type: String, enum: ['padre', 'madre', 'hermano', 'otro', ''], default: '' },
     profesion: { type: String, trim: true },
   },
@@ -34,17 +32,6 @@ const paymentConfigRefSchema = new mongoose.Schema(
 
 const studentSchema = new mongoose.Schema(
   {
-    // Compatibilidad con API existente (derivados o duplicados)
-    name: { type: String, trim: true },
-    ci: { type: String, trim: true },
-    year: { type: Number, enum: [...INSCRIPTION.YEARS, 7, 8, 9, 10, 11, 12] },
-    section: { type: String, trim: true },
-    aula: { type: String, trim: true },
-    enrollmentType: {
-      type: String,
-      enum: ['nuevo_ingreso', 'regular', 'nuevo', 'transferencia', 'reingreso'],
-      default: 'nuevo_ingreso',
-    },
     // Información personal (alumno)
     nombres: { type: String, required: true, trim: true },
     apellidos: { type: String, required: true, trim: true },
@@ -67,11 +54,6 @@ const studentSchema = new mongoose.Schema(
     telefono: { type: String, trim: true },
     // Representante legal
     representative: { type: representativeSchema, default: () => ({}) },
-    nombresRepresentante: { type: String, trim: true },
-    apellidosRepresentante: { type: String, trim: true },
-    cedulaRepresentante: { type: String, trim: true },
-    parentezco: { type: String, enum: ['padre', 'madre', 'hermano', 'otro', ''], default: '' },
-    profesionRepresentante: { type: String, trim: true },
     // Documentación (URLs de archivos subidos)
     fotoAlumno: { type: String, trim: true },
     fotoRepresentante: { type: String, trim: true },

@@ -5,19 +5,18 @@ import mongoose from 'mongoose';
  */
 const paymentSchema = new mongoose.Schema(
   {
-    student: { type: mongoose.Schema.Types.ObjectId, ref: 'Student', required: true },
-    cutOffDate: { type: mongoose.Schema.Types.ObjectId, ref: 'CutOffDate', required: true },
-    amountBs: { type: Number, default: 0 },
-    amountUsd: { type: Number, default: 0 },
-    exchangeRate: { type: Number },
-    paymentMethod: { type: String, trim: true }, // efectivo, transferencia, punto de venta, etc.
-    paidAt: { type: Date, default: Date.now },
-    receipt: { type: mongoose.Schema.Types.ObjectId, ref: 'Receipt' },
-    exemption: {
-      amountExonerated: { type: Number, default: 0 },
-      amountPending: { type: Number, default: 0 },
+    estudiante: { type: mongoose.Schema.Types.ObjectId, ref: 'Student', required: true },
+    fechaCorte: { type: mongoose.Schema.Types.ObjectId, ref: 'CutOffDate', required: true },
+    montoBs: { type: Number, default: 0 },
+    montoUsd: { type: Number, default: 0 },
+    metodoPago: { type: String, trim: true }, // efectivo, transferencia, punto de venta, etc.
+    fechaPago: { type: Date, default: Date.now },
+    recibo: { type: mongoose.Schema.Types.ObjectId, ref: 'Receipt' },
+    exoneracion: {
+      montoExonerado: { type: Number, default: 0 },
+      montoPendiente: { type: Number, default: 0 },
     },
-    notes: { type: String, trim: true },
+    notas: { type: String, trim: true },
   },
   { timestamps: true }
 );

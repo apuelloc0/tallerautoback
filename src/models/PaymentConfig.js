@@ -6,12 +6,18 @@ import mongoose from 'mongoose';
  */
 const paymentConfigSchema = new mongoose.Schema(
   {
-    name: { type: String, trim: true },
-    period: { type: String, required: true, trim: true }, // ej: "2025-01", "2024-2025"
-    amountBs: { type: Number, default: 0 },
-    amountUsd: { type: Number, default: 0 },
-    exchangeRate: { type: Number }, // tasa Bs/$ si aplica
-    active: { type: Boolean, default: true },
+    // Tipo de configuración
+    tipo: { type: String, enum: ['anual', 'mensual', 'quincenal', 'semanal'], default: null },
+    // Fecha de inicio
+    fechaInicio: { type: Date, required: true },
+    // Fecha de fin
+    fechaFin: { type: Date, required: true },
+    // Periodo escolar
+    periodoEscolar: { type: String, required: true, trim: true },
+    // Monto en USD
+    montoUsd: { type: Number, default: 0 },
+    // Activo
+    activo: { type: Boolean, default: true },
   },
   { timestamps: true }
 );

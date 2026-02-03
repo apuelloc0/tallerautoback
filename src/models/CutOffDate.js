@@ -5,12 +5,11 @@ import mongoose from 'mongoose';
  */
 const cutOffDateSchema = new mongoose.Schema(
   {
-    period: { type: String, required: true, trim: true },
-    amountUsd: { type: Number, default: 0 },
-    amountBs: { type: Number, default: 0 },
-    dueDate: { type: Date, required: true },
-    description: { type: String, trim: true },
-    active: { type: Boolean, default: true },
+    // Periodo de pago
+    config: { type: mongoose.Schema.Types.ObjectId, ref: 'PaymentConfig', required: true },
+    montoUsd: { type: Number, default: 0 },
+    fechaCorte: { type: Date, required: true },
+    activo: { type: Boolean, default: true },
   },
   { timestamps: true }
 );
