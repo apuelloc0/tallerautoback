@@ -1,6 +1,20 @@
 import Grade from '../models/Grade.js';
 import Student from '../models/Student.js';
 
+const withStudentAliases = (g) => {
+  if (g.student && typeof g.student === 'object') {
+    const s = g.student;
+    g.student = {
+      ...s,
+      name: [s.firstName, s.lastName].filter(Boolean).join(' ').trim(),
+      ci: s.idNumber,
+      year: s.grade ? parseInt(s.grade, 10) : undefined,
+      section: s.section,
+    };
+  }
+  return g;
+};
+
 export const list = async (req, res, next) => {
   try {
     const { studentId, year, subject } = req.query;
@@ -9,10 +23,10 @@ export const list = async (req, res, next) => {
     if (year) filter.year = Number(year);
     if (subject) filter.subject = new RegExp(subject, 'i');
     const grades = await Grade.find(filter)
-      .populate('student', 'name ci year section')
+      .populate('student', 'firstName lastName idNumber grade section')
       .sort({ year: -1, subject: 1 })
       .lean();
-    res.json({ ok: true, data: grades });
+    res.json({ ok: true, data: grades.map(withStudentAliases) });
   } catch (err) {
     next(err);
   }
@@ -21,12 +35,12 @@ export const list = async (req, res, next) => {
 export const getOne = async (req, res, next) => {
   try {
     const grade = await Grade.findById(req.params.id)
-      .populate('student', 'name ci year section')
+      .populate('student', 'firstName lastName idNumber grade section')
       .lean();
     if (!grade) {
       return res.status(404).json({ ok: false, message: 'Nota no encontrada.' });
     }
-    res.json({ ok: true, data: grade });
+    res.json({ ok: true, data: withStudentAliases(grade) });
   } catch (err) {
     next(err);
   }
@@ -37,9 +51,9 @@ export const create = async (req, res, next) => {
     const grade = new Grade(req.body);
     await grade.save();
     const populated = await Grade.findById(grade._id)
-      .populate('student', 'name ci year section')
+      .populate('student', 'firstName lastName idNumber grade section')
       .lean();
-    res.status(201).json({ ok: true, data: populated, message: 'Nota registrada.' });
+    res.status(201).json({ ok: true, data: withStudentAliases(populated), message: 'Nota registrada.' });
   } catch (err) {
     next(err);
   }
@@ -58,9 +72,9 @@ export const update = async (req, res, next) => {
     Object.assign(grade, rest);
     await grade.save();
     const populated = await Grade.findById(grade._id)
-      .populate('student', 'name ci year section')
+      .populate('student', 'firstName lastName idNumber grade section')
       .lean();
-    res.json({ ok: true, data: populated });
+    res.json({ ok: true, data: withStudentAliases(populated) });
   } catch (err) {
     next(err);
   }
@@ -106,11 +120,11 @@ export const bestGrades = async (req, res, next) => {
     if (year) filter.year = Number(year);
     if (subject) filter.subject = new RegExp(subject, 'i');
     const grades = await Grade.find(filter)
-      .populate('student', 'name ci year section')
+      .populate('student', 'firstName lastName idNumber grade section')
       .sort({ average: -1 })
       .limit(Number(limit) || 20)
       .lean();
-    res.json({ ok: true, data: grades });
+    res.json({ ok: true, data: grades.map(withStudentAliases) });
   } catch (err) {
     next(err);
   }

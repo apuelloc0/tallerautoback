@@ -71,6 +71,8 @@ export const updateCutOff = async (req, res, next) => {
   }
 };
 
+const studentSelect = 'firstName lastName idNumber grade section';
+
 /** Registro de pagos */
 export const listPayments = async (req, res, next) => {
   try {
@@ -84,7 +86,7 @@ export const listPayments = async (req, res, next) => {
       if (to) filter.paidAt.$lte = new Date(to);
     }
     const payments = await Payment.find(filter)
-      .populate('student', 'name ci year section')
+      .populate('student', studentSelect)
       .populate('cutOffDate')
       .populate('receipt')
       .sort({ paidAt: -1 })
@@ -95,12 +97,38 @@ export const listPayments = async (req, res, next) => {
   }
 };
 
+/** Normaliza body del formulario Nuevo Pago: Estudiante, Tipo de Pago, Forma de pago, Monto, Fecha, Meses cancelados, Descripción */
+function normalizePaymentBody(body) {
+  const paymentType = (body.paymentType || body.tipoPago || '').toLowerCase();
+  const isUsd = paymentType === 'usd' || paymentType === 'dolares' || paymentType === 'dólares';
+  const amount = Number(body.amount) || Number(body.amountUsd) || Number(body.amountBs) || 0;
+  const paidAt = body.paidAt || body.fechaPago || body.paymentDate ? new Date(body.paidAt || body.fechaPago || body.paymentDate) : new Date();
+
+  const data = {
+    student: body.student || body.estudiante,
+    cutOffDate: body.cutOffDate || body.fechaCorte || null,
+    paymentType: isUsd ? 'usd' : paymentType === 'ves' || paymentType === 'bolivares' ? 'ves' : body.paymentType || null,
+    paymentMethod: body.paymentMethod || body.formaPago || body.metodoPago || '',
+    amount,
+    amountUsd: body.amountUsd != null ? Number(body.amountUsd) : isUsd ? amount : 0,
+    amountBs: body.amountBs != null ? Number(body.amountBs) : !isUsd && amount ? amount : 0,
+    paidAt,
+    monthsPaidAmount: Number(body.monthsPaidAmount ?? body.mesesCancelados ?? 0) || 0,
+    description: body.description || body.descripcion || '',
+    receipt: body.receipt || null,
+    exemption: body.exemption || null,
+  };
+  if (!data.exemption) delete data.exemption;
+  return data;
+}
+
 export const createPayment = async (req, res, next) => {
   try {
-    const payment = new Payment(req.body);
+    const data = normalizePaymentBody(req.body);
+    const payment = new Payment(data);
     await payment.save();
     const populated = await Payment.findById(payment._id)
-      .populate('student', 'name ci year section')
+      .populate('student', studentSelect)
       .populate('cutOffDate')
       .populate('receipt')
       .lean();
@@ -117,7 +145,7 @@ export const updatePayment = async (req, res, next) => {
       { $set: req.body },
       { new: true }
     )
-      .populate('student', 'name ci year section')
+      .populate('student', studentSelect)
       .populate('cutOffDate')
       .populate('receipt')
       .lean();
@@ -192,7 +220,7 @@ export const solvencies = async (req, res, next) => {
     const students = await Student.find({ active: true }).lean();
     const debtors = [];
     for (const s of students) {
-      if (s.paymentConfig?.exoneracion?.type === 'permanente') continue;
+      if (s.paymentConfig?.exemption?.type === 'permanente') continue;
       for (const cut of cutOffs) {
         const key = `${s._id}-${cut._id}`;
         if (!paidSet.has(key)) {

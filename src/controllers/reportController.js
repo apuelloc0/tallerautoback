@@ -15,7 +15,7 @@ export const institutional = async (req, res, next) => {
     ]);
     const byYearSection = await Student.aggregate([
       { $match: { active: true } },
-      { $group: { _id: { year: '$year', section: '$section' }, count: { $sum: 1 } } },
+      { $group: { _id: { year: '$grade', section: '$section' }, count: { $sum: 1 } } },
       { $sort: { '_id.year': 1, '_id.section': 1 } },
     ]);
     const totals = paymentTotal[0] || { bs: 0, usd: 0 };

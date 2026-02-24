@@ -1,27 +1,31 @@
 import mongoose from 'mongoose';
 
 /**
- * Pago: monto (Bs, USD, tasa), método, fecha, corte, exoneración, estudiante, comprobante.
+ * Pago: estudiante, tipo (USD/VES), monto, forma de pago, fecha, meses cancelados, descripción.
+ * cutOffDate opcional (para vincular con cortes de solvencia).
  */
 const paymentSchema = new mongoose.Schema(
   {
-    estudiante: { type: mongoose.Schema.Types.ObjectId, ref: 'Student', required: true },
-    fechaCorte: { type: mongoose.Schema.Types.ObjectId, ref: 'CutOffDate', required: true },
-    montoBs: { type: Number, default: 0 },
-    montoUsd: { type: Number, default: 0 },
-    metodoPago: { type: String, trim: true }, // efectivo, transferencia, punto de venta, etc.
-    fechaPago: { type: Date, default: Date.now },
-    recibo: { type: mongoose.Schema.Types.ObjectId, ref: 'Receipt' },
-    exoneracion: {
-      montoExonerado: { type: Number, default: 0 },
-      montoPendiente: { type: Number, default: 0 },
+    student: { type: mongoose.Schema.Types.ObjectId, ref: 'Student', required: true },
+    cutOffDate: { type: mongoose.Schema.Types.ObjectId, ref: 'CutOffDate', default: null },
+    paymentType: { type: String, enum: ['usd', 'ves'], trim: true }, // dolares/bolivares por compatibilidad con front
+    paymentMethod: { type: String, trim: true }, // PagoMovil, Efectivo, Transferencia, etc.
+    amount: { type: Number, default: 0 }, // Monto principal en la moneda de paymentType
+    amountUsd: { type: Number, default: 0 },
+    amountBs: { type: Number, default: 0 },
+    paidAt: { type: Date, default: Date.now },
+    description: { type: String, trim: true },
+    receipt: { type: mongoose.Schema.Types.ObjectId, ref: 'Receipt' },
+    exemption: {
+      amountExonerated: { type: Number, default: 0 },
+      amountPending: { type: Number, default: 0 },
     },
-    notas: { type: String, trim: true },
   },
   { timestamps: true }
 );
 
 paymentSchema.index({ student: 1, cutOffDate: 1 });
+paymentSchema.index({ paidAt: -1 });
 
 const Payment = mongoose.model('Payment', paymentSchema);
 export default Payment;
