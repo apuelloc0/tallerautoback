@@ -2,6 +2,7 @@ import Student from '../models/Student.js';
 import Document from '../models/Document.js';
 import { INSCRIPTION } from '../config/constants.js';
 import { getPublicPath } from '../config/upload.js';
+import PDFDocument from 'pdfkit';
 
 export const list = async (req, res, next) => {
   try {
@@ -50,7 +51,7 @@ const STUDENT_BODY_FIELDS = [
   'address', 'birthPlace', 'enrollmentDate', 'grade', 'section',
   'previousInstitution', 'enrollmentType', 'email', 'phone',
   'representative', 'representativeFirstName', 'representativeLastName', 'representativeIdNumber',
-  'representativeRelationship', 'representativeProfession',
+  'representativeRelationship', 'representativeProfession', 'representativePhone', 'representativeEmail',
   'studentPhotoUrl', 'representativePhotoUrl',
   'age', 'aula', 'paymentConfig', 'active'
 ];
@@ -87,7 +88,7 @@ export const create = async (req, res, next) => {
 function buildRepresentative(data) {
   const hasFlat = data.representativeFirstName != null || data.representativeLastName != null ||
     data.representativeIdNumber != null || data.representativeRelationship != null ||
-    data.representativeProfession != null;
+    data.representativeProfession != null || data.representativePhone != null || data.representativeEmail != null;
   if (!hasFlat) return;
   if (!data.representative || typeof data.representative !== 'object') data.representative = {};
   if (data.representativeFirstName != null) data.representative.firstName = data.representativeFirstName;
@@ -95,6 +96,8 @@ function buildRepresentative(data) {
   if (data.representativeIdNumber != null) data.representative.idNumber = data.representativeIdNumber;
   if (data.representativeRelationship != null) data.representative.relationship = data.representativeRelationship;
   if (data.representativeProfession != null) data.representative.profession = data.representativeProfession;
+  if (data.representativePhone != null) data.representative.phone = data.representativePhone;
+  if (data.representativeEmail != null) data.representative.email = data.representativeEmail;
 }
 
 export const update = async (req, res, next) => {
@@ -218,5 +221,82 @@ export const quotaStatus = async (req, res, next) => {
     });
   } catch (err) {
     next(err);
+  }
+};
+
+/** Reporte PDF con información básica de todos los estudiantes activos */
+export const reportPdf = async (req, res, next) => {
+  try {
+    const students = await Student.find({ active: { $ne: false } })
+      .sort({ grade: 1, section: 1, lastName: 1, firstName: 1 })
+      .lean();
+
+    const filename = `reporte-estudiantes-${new Date().toISOString().slice(0, 10)}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    const doc = new PDFDocument({ margin: 40, size: 'A4', layout: 'landscape' });
+    doc.pipe(res);
+
+    doc.fontSize(16).text('Reporte de estudiantes', { align: 'center' });
+    doc.moveDown(0.5);
+    doc.fontSize(10).text(`Generado: ${new Date().toLocaleString('es')} — Total: ${students.length} estudiantes`, { align: 'center' });
+    doc.moveDown(1);
+
+    const colWidths = [70, 120, 35, 35, 100, 85, 75];
+    const headers = ['Cédula', 'Nombre completo', 'Grado', 'Secc.', 'Email', 'Teléfono', 'F. inscripción'];
+    const startY = doc.y;
+    let y = startY;
+
+    doc.fontSize(8).font('Helvetica-Bold');
+    let x = 40;
+    headers.forEach((h, i) => {
+      doc.text(h, x, y, { width: colWidths[i], ellipsis: true });
+      x += colWidths[i] + 4;
+    });
+    y += 14;
+    doc.moveTo(40, y).lineTo(doc.page.width - 40, y).stroke();
+    y += 6;
+
+    doc.font('Helvetica');
+    for (const s of students) {
+      if (y > doc.page.height - 50) {
+        doc.addPage({ size: 'A4', layout: 'landscape', margin: 40 });
+        y = 40;
+        doc.fontSize(8).font('Helvetica-Bold');
+        x = 40;
+        headers.forEach((h, i) => {
+          doc.text(h, x, y, { width: colWidths[i], ellipsis: true });
+          x += colWidths[i] + 4;
+        });
+        y += 14;
+        doc.moveTo(40, y).lineTo(doc.page.width - 40, y).stroke();
+        y += 6;
+        doc.font('Helvetica');
+      }
+
+      console.log('s', s);
+      const fullName = [s.nombres, s.apellidos].filter(Boolean).join(' ') || '—';
+      const enrollDate = s.fechaInscripcion ? new Date(s.fechaInscripcion).toLocaleDateString('es') : '—';
+      x = 40;
+      const row = [
+        (s.cedula || '').trim() || '—',
+        fullName,
+        (s.grado || '—').toString(),
+        (s.seccion || '—').toString(),
+        (s.email || '').trim() || '—',
+        (s.telefono || '').trim() || '—',
+        enrollDate,
+      ];
+      row.forEach((cell, i) => {
+        doc.text(String(cell).slice(0, 30), x, y, { width: colWidths[i], ellipsis: true });
+        x += colWidths[i] + 4;
+      });
+      y += 12;
+    }
+
+    doc.end();
+  } catch (err) {
+    if (!res.headersSent) next(err);
   }
 };

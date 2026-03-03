@@ -20,16 +20,19 @@ router.get('/cutoff', requirePermission('PAGOS_REGISTRO'), payment.listCutOff);
 router.post('/cutoff', requirePermission('PAGOS_REGISTRO'), cutOffValidator, validate, payment.createCutOff);
 router.put('/cutoff/:id', requirePermission('PAGOS_REGISTRO'), param('id').isMongoId(), validate, payment.updateCutOff);
 
-// Registro de pagos
-router.get('/', requirePermission('PAGOS_REGISTRO'), payment.listPayments);
+// Registro de pagos (crear/editar solo PAGOS_REGISTRO; listar/historial también PAGOS_VER para secretaria)
+router.get('/', requirePermission('PAGOS_VER'), payment.listPayments);
 router.post('/', requirePermission('PAGOS_REGISTRO'), paymentValidator, validate, payment.createPayment);
 router.put('/:id', requirePermission('PAGOS_REGISTRO'), updatePaymentValidator, validate, payment.updatePayment);
 
-// Historial e información general
-router.get('/history/student/:id', requirePermission('PAGOS_REGISTRO'), param('id').isMongoId(), validate, payment.paymentHistoryByStudent);
-router.get('/summary', requirePermission('PAGOS_REGISTRO'), payment.paymentSummary);
+// Cortes pendientes por estudiante (para formulario de pago)
+router.get('/student/:id/pending', requirePermission('PAGOS_REGISTRO'), param('id').isMongoId(), validate, payment.studentPendingCutOffs);
 
-// Solvencias
+// Historial e información general (consulta: secretaria puede ver)
+router.get('/history/student/:id', requirePermission('PAGOS_VER'), param('id').isMongoId(), validate, payment.paymentHistoryByStudent);
+router.get('/summary', requirePermission('PAGOS_VER'), payment.paymentSummary);
+
+// Solvencias (directora, administrador, secretaria)
 router.get('/solvencies', requirePermission('SOLVENCIAS'), payment.solvencies);
 
 export default router;

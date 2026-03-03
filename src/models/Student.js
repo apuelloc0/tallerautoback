@@ -18,6 +18,8 @@ const paymentConfigRefSchema = new mongoose.Schema(
     hasFullScholarship: { type: Boolean, default: false },
     hasDiscount: { type: Boolean, default: false },
     discountType: { type: String, enum: ['pago_total', 'divisas', 'otro'], default: null },
+    discountPercentage: { type: Number, min: 0, max: 100 }, // beca parcial: % a descontar
+    discountAmountUsd: { type: Number, min: 0 }, // beca parcial: monto fijo USD a descontar
     exemption: {
       type: { type: String, enum: ['ninguna', 'permanente', 'temporal'], default: 'ninguna' },
       until: Date,

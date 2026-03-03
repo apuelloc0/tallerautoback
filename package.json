@@ -9,7 +9,11 @@
     "dev": "node --watch src/server.js",
     "seed": "node scripts/seed-admin.js"
   },
-  "keywords": ["students", "express", "mongodb"],
+  "keywords": [
+    "students",
+    "express",
+    "mongodb"
+  ],
   "author": "",
   "license": "ISC",
   "engines": {
@@ -20,12 +24,13 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^5.0.1",
-    "express-validator": "^7.2.0",
     "express-rate-limit": "^7.4.1",
+    "express-validator": "^7.2.0",
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.8.3",
-    "multer": "^1.4.5-lts.1"
+    "multer": "^1.4.5-lts.1",
+    "pdfkit": "^0.17.2"
   },
   "devDependencies": {
     "nodemon": "^3.1.7"

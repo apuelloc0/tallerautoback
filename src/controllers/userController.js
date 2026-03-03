@@ -1,4 +1,5 @@
 import User from '../models/User.js';
+import jwt from 'jsonwebtoken';
 
 export const list = async (req, res, next) => {
   try {
@@ -16,6 +17,72 @@ export const getOne = async (req, res, next) => {
       return res.status(404).json({ ok: false, message: 'Usuario no encontrado.' });
     }
     res.json({ ok: true, data: user.toJSON() });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const verifyUsername = async (req, res, next) => {
+  try {
+    const user = await User.findOne({ username: req.params.username });
+    res.json({ ok: true, userId: user._id, securityQuestions: user.securityQuestions });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const verifySecurityAnswers = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.body.userId);
+    if (!user) {
+      return res.status(404).json({ ok: false, message: 'Usuario no encontrado.' });
+    }
+    const normalized = (s) => String(s || '').toLowerCase().trim();
+    const allMatch = req.body.answers.every(
+      (a) => {
+        console.log('a', a);
+        console.log('user.securityQuestions[a.index]', user.securityQuestions[a.index]);
+        console.log('normalized(user.securityQuestions[a.index].answer)', normalized(user.securityQuestions[a.index].answer));
+        console.log('normalized(a.answer)', normalized(a.answer));
+        return user.securityQuestions[a.index] &&
+          normalized(user.securityQuestions[a.index].answer) === normalized(a.answer)
+      }
+    );
+    if (!allMatch || req.body.answers.length !== user.securityQuestions.length) {
+      return res.status(401).json({ ok: false, message: 'Respuestas incorrectas.' });
+    }
+    const resetToken = jwt.sign(
+      { userId: user._id, purpose: 'reset' },
+      process.env.JWT_SECRET,
+      { expiresIn: '5m' }
+    );
+    // Save the reset token in the database
+    user.resetToken = resetToken;
+    await user.save();
+
+    res.json({ ok: true, message: 'Respuestas correctas.', resetToken: resetToken });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const resetPassword = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.body.userId);
+    if (!user) {
+      return res.status(404).json({ ok: false, message: 'Usuario no encontrado.' });
+    }
+    if (!user.resetToken) {
+      return res.status(400).json({ ok: false, message: 'Token de restablecimiento de contraseña no válido.' });
+    }
+    const decoded = jwt.verify(user.resetToken, process.env.JWT_SECRET);
+    if (decoded.purpose !== 'reset') {
+      return res.status(400).json({ ok: false, message: 'Token de restablecimiento de contraseña no válido.' });
+    }
+    user.password = req.body.newPassword;
+    user.resetToken = null;
+    await user.save();
+    res.json({ ok: true, message: 'Contraseña restablecida.' });
   } catch (err) {
     next(err);
   }

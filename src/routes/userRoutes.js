@@ -13,6 +13,9 @@ router.use(requirePermission('USUARIOS_GESTION'));
 
 router.get('/', user.list);
 router.get('/:id', param('id').isMongoId(), validate, user.getOne);
+router.get('/verify-user/:username', validate, user.verifyUsername);
+router.post('/verify-security-answers', user.verifySecurityAnswers);
+router.post('/reset-password', user.resetPassword);
 router.post('/', createUserValidator, validate, user.create);
 router.put('/:id', updateUserValidator, validate, user.update);
 router.delete('/:id', param('id').isMongoId(), validate, user.remove);

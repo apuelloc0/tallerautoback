@@ -1,50 +1,54 @@
 import { body, param } from 'express-validator';
 
-/** Validación para crear pago (formulario Nuevo Pago) */
+/** Crear transacción + allocations */
 export const paymentValidator = [
-  body('student').isMongoId().withMessage('Estudiante requerido'),
-  body('cutOffDate').optional().isMongoId().withMessage('Fecha de corte inválida'),
-  body('paymentType').optional().isIn(['usd', 'ves', 'dolares', 'bolivares']).withMessage('Tipo de pago inválido'),
+  body('paymentType').optional().isIn(['usd', 'ves']).withMessage('Tipo de pago inválido'),
   body('paymentMethod').optional().trim(),
   body('amount').optional().isFloat({ min: 0 }).withMessage('Monto debe ser un número positivo'),
   body('amountUsd').optional().isFloat({ min: 0 }),
   body('amountBs').optional().isFloat({ min: 0 }),
   body('paidAt').optional().isISO8601().withMessage('Fecha de pago inválida'),
-  body('monthsPaidAmount').optional().isFloat({ min: 0 }),
   body('description').optional().trim(),
-  body('exchangeRate').optional().isNumeric(),
-  body('exemption.amountExonerated').optional().isNumeric(),
-  body('exemption.amountPending').optional().isNumeric(),
+  body('receipt').optional().isMongoId(),
+  body('allocations').isArray().withMessage('allocations debe ser un array'),
+  body('allocations.*.student').isMongoId().withMessage('Estudiante requerido en cada línea'),
+  body('allocations.*.cutOffDate').isMongoId().withMessage('Fecha de corte requerida en cada línea'),
+  body('allocations.*.amountUsd').optional().isFloat({ min: 0 }),
+  body('allocations.*.amountBs').optional().isFloat({ min: 0 }),
 ];
 
 export const configValidator = [
-  body('period').trim().notEmpty().withMessage('Período requerido'),
-  body('amountBs').optional().isNumeric(),
-  body('amountUsd').optional().isNumeric(),
-  body('exchangeRate').optional().isNumeric(),
-  body('name').optional().trim(),
+  body('periodoEscolar').optional().trim(),
+  body('period').optional().trim(),
+  body('tipo').optional().isIn(['anual', 'mensual', 'quincenal', 'semanal']),
+  body('fechaInicio').isISO8601().withMessage('Fecha de inicio requerida'),
+  body('fechaFin').isISO8601().withMessage('Fecha de fin requerida'),
+  body('montoUsd').optional().isFloat({ min: 0 }),
+  body('activo').optional().isBoolean(),
+  body().custom((_, { req }) => {
+    const periodo = (req.body.periodoEscolar || req.body.period || '').toString().trim();
+    if (!periodo) {
+      throw new Error('Período escolar requerido (periodoEscolar o period)');
+    }
+    return true;
+  }),
 ];
 
 export const cutOffValidator = [
-  body('period').trim().notEmpty().withMessage('Período requerido'),
-  body('dueDate').isISO8601().withMessage('Fecha de corte requerida'),
-  body('amountUsd').optional().isNumeric(),
-  body('amountBs').optional().isNumeric(),
-  body('description').optional().trim(),
+  body('config').isMongoId().withMessage('Configuración requerida'),
+  body('period').optional().trim(),
+  body('fechaCorte').isISO8601().withMessage('Fecha de corte requerida'),
+  body('montoUsd').optional().isFloat({ min: 0 }),
+  body('activo').optional().isBoolean(),
 ];
 
 export const updatePaymentValidator = [
   param('id').isMongoId().withMessage('ID inválido'),
-  body('student').optional().isMongoId(),
-  body('cutOffDate').optional().isMongoId(),
-  body('paymentType').optional().isIn(['usd', 'ves', 'dolares', 'bolivares']),
+  body('paymentType').optional().isIn(['usd', 'ves']),
   body('paymentMethod').optional().trim(),
   body('amount').optional().isFloat({ min: 0 }),
   body('amountUsd').optional().isFloat({ min: 0 }),
   body('amountBs').optional().isFloat({ min: 0 }),
   body('paidAt').optional().isISO8601(),
-  body('monthsPaidAmount').optional().isFloat({ min: 0 }),
   body('description').optional().trim(),
-  body('exemption.amountExonerated').optional().isNumeric(),
-  body('exemption.amountPending').optional().isNumeric(),
 ];

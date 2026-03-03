@@ -8,7 +8,5 @@ const router = Router();
 
 router.post('/login', loginValidator, validate, auth.login);
 router.get('/me', authenticate, auth.me);
-router.post('/forgot-password', forgotPasswordValidator, validate, auth.forgotPassword);
-router.post('/reset-password', resetPasswordValidator, validate, auth.resetPassword);
 
 export default router;

@@ -31,6 +31,7 @@ const userSchema = new mongoose.Schema(
         message: 'Se requieren al menos 2 preguntas de seguridad para recuperación.',
       },
     },
+    resetToken: { type: String, default: null },
   },
   { timestamps: true }
 );

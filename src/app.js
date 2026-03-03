@@ -14,6 +14,9 @@ import documentRoutes from './routes/documentRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
 import receiptRoutes from './routes/receiptRoutes.js';
 import gradeRoutes from './routes/gradeRoutes.js';
+import academicConfigRoutes from './routes/academicConfigRoutes.js';
+import generalConfigRoutes from './routes/generalConfigRoutes.js';
+import dashboardRoutes from './routes/dashboardRoutes.js';
 import reportRoutes from './routes/reportRoutes.js';
 import backupRoutes from './routes/backupRoutes.js';
 
@@ -21,15 +24,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 200,
-  message: { ok: false, message: 'Demasiadas solicitudes. Intente más tarde.' },
-});
-
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({ origin: true, credentials: true }));
-app.use(limiter);
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
@@ -47,6 +43,9 @@ app.use('/api/documents', documentRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/receipts', receiptRoutes);
 app.use('/api/grades', gradeRoutes);
+app.use('/api/config/academic', academicConfigRoutes);
+app.use('/api/config/general', generalConfigRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/backups', backupRoutes);
 

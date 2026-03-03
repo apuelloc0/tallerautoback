@@ -2,7 +2,7 @@
  * Roles del sistema (2 niveles: alta = DIRECTORA, resto = ADMINISTRADOR/SECRETARIA)
  * DIRECTORA: acceso total
  * ADMINISTRADOR: registro de pagos, solvencias, registro de estudiantes
- * SECRETARIA: (definir permisos según necesidad)
+ * SECRETARIA: solo ver notas (consulta)
  */
 export const ROLES = {
   DIRECTORA: 'DIRECTORA',
@@ -16,7 +16,13 @@ export const PERMISSIONS = {
   ESTUDIANTES_REGISTRO: [ROLES.DIRECTORA, ROLES.ADMINISTRADOR],
   ESTUDIANTES_MODIFICACION: [ROLES.DIRECTORA, ROLES.ADMINISTRADOR],
   PAGOS_REGISTRO: [ROLES.DIRECTORA, ROLES.ADMINISTRADOR],
+  /** Solo consulta: listar pagos, historial, resumen (sin crear/editar) */
+  PAGOS_VER: [ROLES.DIRECTORA, ROLES.ADMINISTRADOR],
   SOLVENCIAS: [ROLES.DIRECTORA, ROLES.ADMINISTRADOR],
+  /** Notas: ver listado y detalle */
+  NOTAS_VER: [ROLES.DIRECTORA, ROLES.ADMINISTRADOR, ROLES.SECRETARIA],
+  /** Notas: crear/editar */
+  NOTAS_REGISTRO: [ROLES.DIRECTORA, ROLES.ADMINISTRADOR],
   USUARIOS_GESTION: [ROLES.DIRECTORA],
   REPORTES: [ROLES.DIRECTORA],
   RESPALDO: [ROLES.DIRECTORA],
