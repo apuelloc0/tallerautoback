@@ -19,7 +19,7 @@ export const institutional = async (req, res, next) => {
     ]);
     const byYearSection = await Student.aggregate([
       { $match: { active: true } },
-      { $group: { _id: { grado: '$grado', seccion: '$seccion' }, count: { $sum: 1 } } },
+      { $group: { _id: { grado: '$grade', seccion: '$section' }, count: { $sum: 1 } } },
       { $sort: { '_id.grado': 1, '_id.seccion': 1 } },
     ]);
     const totals = paymentTotal[0] || { bs: 0, usd: 0 };
@@ -64,7 +64,7 @@ export const enrollmentByGradeSection = async (req, res, next) => {
     const { format } = req.query;
     const agg = await Student.aggregate([
       { $match: { active: { $ne: false } } },
-      { $group: { _id: { grado: '$grado', seccion: '$seccion' }, count: { $sum: 1 } } },
+      { $group: { _id: { grado: '$grade', seccion: '$section' }, count: { $sum: 1 } } },
       { $sort: { '_id.grade': 1, '_id.section': 1 } },
     ]);
     const rows = agg.map((a) => ({

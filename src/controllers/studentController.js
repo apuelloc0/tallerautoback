@@ -276,16 +276,16 @@ export const reportPdf = async (req, res, next) => {
       }
 
       console.log('s', s);
-      const fullName = [s.nombres, s.apellidos].filter(Boolean).join(' ') || '—';
-      const enrollDate = s.fechaInscripcion ? new Date(s.fechaInscripcion).toLocaleDateString('es') : '—';
+      const fullName = [s.firstName, s.lastName].filter(Boolean).join(' ') || '—';
+      const enrollDate = s.enrollmentDate ? new Date(s.enrollmentDate).toLocaleDateString('es') : '—';
       x = 40;
       const row = [
-        (s.cedula || '').trim() || '—',
+        (s.idNumber || '').trim() || '—',
         fullName,
-        (s.grado || '—').toString(),
-        (s.seccion || '—').toString(),
+        (s.grade || '—').toString(),
+        (s.section || '—').toString(),
         (s.email || '').trim() || '—',
-        (s.telefono || '').trim() || '—',
+        (s.phone || '').trim() || '—',
         enrollDate,
       ];
       row.forEach((cell, i) => {
