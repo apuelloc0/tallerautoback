@@ -16,6 +16,7 @@ router.get('/:id', requirePermission('NOTAS_VER'), param('id').isMongoId(), vali
 // Crear/editar solo directora y administrador
 router.post('/', requirePermission('NOTAS_REGISTRO'), gradeValidator, validate, grade.create);
 router.put('/:id', requirePermission('NOTAS_REGISTRO'), param('id').isMongoId(), gradeValidator, validate, grade.update);
+router.delete('/:id', requirePermission('NOTAS_REGISTRO'), param('id').isMongoId(), validate, grade.remove);
 router.post('/bulk', requirePermission('NOTAS_REGISTRO'), grade.bulkUpsert);
 
 export default router;

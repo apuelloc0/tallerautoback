@@ -10,6 +10,8 @@ export const paymentValidator = [
   body('paidAt').optional().isISO8601().withMessage('Fecha de pago inválida'),
   body('description').optional().trim(),
   body('receipt').optional().isMongoId(),
+  body('referenceNumber').optional().trim(),
+  body('supportImageUrl').optional().trim(),
   body('allocations').isArray().withMessage('allocations debe ser un array'),
   body('allocations.*.student').isMongoId().withMessage('Estudiante requerido en cada línea'),
   body('allocations.*.cutOffDate').isMongoId().withMessage('Fecha de corte requerida en cada línea'),
@@ -51,4 +53,6 @@ export const updatePaymentValidator = [
   body('amountBs').optional().isFloat({ min: 0 }),
   body('paidAt').optional().isISO8601(),
   body('description').optional().trim(),
+  body('referenceNumber').optional().trim(),
+  body('supportImageUrl').optional().trim(),
 ];

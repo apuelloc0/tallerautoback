@@ -15,6 +15,8 @@ const paymentSchema = new mongoose.Schema(
     paidAt: { type: Date, default: Date.now },
     description: { type: String, trim: true },
     receipt: { type: mongoose.Schema.Types.ObjectId, ref: 'Receipt' },
+    referenceNumber: { type: String, trim: true, default: '' },
+    supportImageUrl: { type: String, trim: true, default: '' },
   },
   { timestamps: true }
 );

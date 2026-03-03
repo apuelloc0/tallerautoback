@@ -5,10 +5,18 @@ import { requirePermission } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { paymentValidator, configValidator, cutOffValidator, updatePaymentValidator } from '../validators/paymentValidators.js';
 import { param } from 'express-validator';
+import { uploadSingle } from '../config/upload.js';
 
 const router = Router();
 
 router.use(authenticate);
+
+// Subir imagen de soporte (para crear/editar pago)
+router.post('/upload-support', requirePermission('PAGOS_REGISTRO'), uploadSingle('file', 'payment-support'), payment.uploadSupportImage);
+
+// Reporte PDF (lista de pagos) y recibo PDF (una transacción)
+router.get('/report/pdf', requirePermission('PAGOS_VER'), payment.reportPdf);
+router.get('/:id/receipt/pdf', requirePermission('PAGOS_VER'), param('id').isMongoId(), validate, payment.receiptPdf);
 
 // Configuración de periodo y monto
 router.get('/config', requirePermission('PAGOS_REGISTRO'), payment.listConfig);

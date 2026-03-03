@@ -4,6 +4,8 @@ import CutOffDate from '../models/CutOffDate.js';
 import PaymentConfig from '../models/PaymentConfig.js';
 import Student from '../models/Student.js';
 import Receipt from '../models/Receipt.js';
+import { getPublicPath } from '../config/upload.js';
+import PDFDocument from 'pdfkit';
 import mongoose from 'mongoose';
 
 const studentSelect = 'firstName lastName idNumber grade section';
@@ -159,6 +161,8 @@ function normalizePaymentBody(body) {
     paidAt,
     description: (body.description || body.descripcion || '').trim(),
     receipt: body.receipt || null,
+    referenceNumber: (body.referenceNumber || '').trim(),
+    supportImageUrl: (body.supportImageUrl || '').trim(),
     allocations: Array.isArray(body.allocations) ? body.allocations : [],
   };
 }
@@ -184,6 +188,8 @@ export const createPayment = async (req, res, next) => {
       paidAt: data.paidAt,
       description: data.description,
       receipt: data.receipt,
+      referenceNumber: data.referenceNumber || '',
+      supportImageUrl: data.supportImageUrl || '',
     });
     await payment.save();
     const allocDocs = data.allocations
@@ -207,9 +213,20 @@ export const createPayment = async (req, res, next) => {
   }
 };
 
+const PAYMENT_UPDATE_FIELDS = [
+  'paymentType', 'paymentMethod', 'amount', 'amountUsd', 'amountBs', 'paidAt',
+  'description', 'receipt', 'referenceNumber', 'supportImageUrl',
+];
+
 export const updatePayment = async (req, res, next) => {
   try {
-    const payment = await Payment.findByIdAndUpdate(req.params.id, { $set: req.body }, { new: true }).populate('receipt').lean();
+    const update = {};
+    PAYMENT_UPDATE_FIELDS.forEach((k) => {
+      if (req.body[k] !== undefined) update[k] = req.body[k];
+    });
+    if (update.referenceNumber !== undefined) update.referenceNumber = String(update.referenceNumber || '').trim();
+    if (update.supportImageUrl !== undefined) update.supportImageUrl = String(update.supportImageUrl || '').trim();
+    const payment = await Payment.findByIdAndUpdate(req.params.id, { $set: update }, { new: true }).populate('receipt').lean();
     if (!payment) return res.status(404).json({ ok: false, message: 'Pago no encontrado.' });
     const allocations = await PaymentAllocation.find({ payment: payment._id })
       .populate('student', studentSelect)
@@ -355,5 +372,138 @@ export const solvencies = async (req, res, next) => {
     res.json({ ok: true, data: debtors });
   } catch (err) {
     next(err);
+  }
+};
+
+/** Subir imagen de soporte de pago. Devuelve la URL para guardar en supportImageUrl. */
+export const uploadSupportImage = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ ok: false, message: 'No se envió ningún archivo.' });
+    }
+    const url = getPublicPath(req, req.file);
+    res.json({ ok: true, url });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/** PDF: lista de pagos (reporte) */
+export const reportPdf = async (req, res, next) => {
+  try {
+    const { from, to } = req.query;
+    const filter = {};
+    if (from || to) {
+      filter.paidAt = {};
+      if (from) filter.paidAt.$gte = new Date(from);
+      if (to) filter.paidAt.$lte = new Date(to + 'T23:59:59.999Z');
+    }
+    const payments = await Payment.find(filter).sort({ paidAt: -1 }).lean();
+    const paymentIds = payments.map((p) => p._id);
+    const allocations = await PaymentAllocation.find({ payment: { $in: paymentIds } })
+      .populate('student', studentSelect)
+      .populate('cutOffDate')
+      .lean();
+    const byPayment = {};
+    allocations.forEach((a) => {
+      if (!byPayment[a.payment]) byPayment[a.payment] = [];
+      byPayment[a.payment].push(a);
+    });
+
+    const filename = `reporte-pagos-${new Date().toISOString().slice(0, 10)}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    const doc = new PDFDocument({ margin: 40, size: 'A4', layout: 'landscape' });
+    doc.pipe(res);
+    doc.fontSize(14).text('Reporte de pagos', { align: 'center' });
+    doc.fontSize(10).text(`${payments.length} transacciones — ${new Date().toLocaleString('es')}`, { align: 'center' });
+    doc.moveDown(1);
+    const w = [50, 90, 55, 70, 70, 90, 80];
+    const headers = ['#', 'Fecha', 'Método', 'USD', 'Bs', 'Ref.', 'Descripción'];
+    let y = doc.y;
+    doc.font('Helvetica-Bold').fontSize(8);
+    let x = 40;
+    headers.forEach((h, i) => { doc.text(h, x, y, { width: w[i] }); x += w[i] + 4; });
+    y += 12;
+    doc.moveTo(40, y).lineTo(doc.page.width - 40, y).stroke();
+    y += 6;
+    doc.font('Helvetica');
+    payments.forEach((p, idx) => {
+      if (y > doc.page.height - 40) {
+        doc.addPage({ size: 'A4', layout: 'landscape', margin: 40 });
+        y = 40;
+      }
+      x = 40;
+      const row = [
+        idx + 1,
+        p.paidAt ? new Date(p.paidAt).toLocaleDateString('es') : '—',
+        (p.paymentMethod || '—').slice(0, 12),
+        (p.amountUsd || 0).toFixed(2),
+        (p.amountBs || 0).toFixed(2),
+        (p.referenceNumber || '—').slice(0, 12),
+        (p.description || '—').slice(0, 14),
+      ];
+      row.forEach((cell, i) => { doc.text(String(cell), x, y, { width: w[i] }); x += w[i] + 4; });
+      y += 10;
+    });
+    doc.end();
+  } catch (err) {
+    if (!res.headersSent) next(err);
+  }
+};
+
+/** PDF: recibo de una transacción (detalle) */
+export const receiptPdf = async (req, res, next) => {
+  try {
+    const payment = await Payment.findById(req.params.id).lean();
+    if (!payment) return res.status(404).json({ ok: false, message: 'Pago no encontrado.' });
+    const allocations = await PaymentAllocation.find({ payment: payment._id })
+      .populate('student', studentSelect)
+      .populate('cutOffDate')
+      .lean();
+
+    const filename = `recibo-${payment._id}-${new Date().toISOString().slice(0, 10)}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    const doc = new PDFDocument({ margin: 50 });
+    doc.pipe(res);
+    doc.fontSize(18).text('Recibo de pago', { align: 'center' });
+    doc.moveDown(0.5);
+    doc.fontSize(10).text(`Fecha: ${payment.paidAt ? new Date(payment.paidAt).toLocaleString('es') : '—'}`, { align: 'center' });
+    doc.moveDown(1);
+    doc.fontSize(11);
+    doc.text(`Forma de pago: ${payment.paymentMethod || '—'}`, { continued: false });
+    doc.text(`Tipo: ${payment.paymentType === 'usd' ? 'USD' : 'Bs'}`, { continued: false });
+    doc.text(`Monto USD: $${(payment.amountUsd || 0).toFixed(2)}`, { continued: false });
+    doc.text(`Monto Bs: ${(payment.amountBs || 0).toFixed(2)}`, { continued: false });
+    doc.text(`Nº de referencia: ${payment.referenceNumber || '—'}`, { continued: false });
+    doc.text(`Descripción: ${payment.description || '—'}`, { continued: false });
+    if (payment.supportImageUrl) doc.text(`Soporte: ${payment.supportImageUrl}`, { continued: false });
+    doc.moveDown(0.8);
+    doc.font('Helvetica-Bold').text('Detalle por estudiante y corte', { continued: false });
+    doc.moveDown(0.3);
+    doc.font('Helvetica');
+    const w = [180, 120, 80, 80];
+    let y = doc.y;
+    doc.font('Helvetica-Bold').fontSize(9);
+    doc.text('Estudiante', 50, y); doc.text('Corte', 230, y); doc.text('USD', 350, y); doc.text('Bs', 430, y);
+    y += 14;
+    doc.moveTo(50, y).lineTo(500, y).stroke();
+    y += 6;
+    doc.font('Helvetica').fontSize(9);
+    allocations.forEach((a) => {
+      const name = a.student ? [a.student.firstName, a.student.lastName].filter(Boolean).join(' ') : '—';
+      const cut = a.cutOffDate?.fechaCorte ? new Date(a.cutOffDate.fechaCorte).toLocaleDateString('es') : '—';
+      doc.text(name.slice(0, 35), 50, y, { width: 175 });
+      doc.text(cut, 230, y, { width: 115 });
+      doc.text((a.amountUsd || 0).toFixed(2), 350, y);
+      doc.text((a.amountBs || 0).toFixed(2), 430, y);
+      y += 12;
+    });
+    doc.moveDown(0.5);
+    doc.font('Helvetica-Bold').text(`Total transacción: $${(payment.amountUsd || 0).toFixed(2)} USD / ${(payment.amountBs || 0).toFixed(2)} Bs`, { continued: false });
+    doc.end();
+  } catch (err) {
+    if (!res.headersSent) next(err);
   }
 };

@@ -80,6 +80,18 @@ export const update = async (req, res, next) => {
   }
 };
 
+export const remove = async (req, res, next) => {
+  try {
+    const grade = await Grade.findByIdAndDelete(req.params.id);
+    if (!grade) {
+      return res.status(404).json({ ok: false, message: 'Nota no encontrada.' });
+    }
+    res.json({ ok: true, message: 'Nota eliminada.' });
+  } catch (err) {
+    next(err);
+  }
+};
+
 /** Carga masiva de notas (array de { student, year, subject, corte1, corte2, corte3 }) */
 export const bulkUpsert = async (req, res, next) => {
   try {
