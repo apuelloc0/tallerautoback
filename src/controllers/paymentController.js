@@ -8,6 +8,7 @@ import { getPublicPath } from '../config/upload.js';
 import PDFDocument from 'pdfkit';
 import mongoose from 'mongoose';
 import { loadInstitutionGeneral, drawReportHeader, drawGeneratedFooter } from '../utils/reportLayout.js';
+import { parseDateOnlyInput } from '../utils/dateOnly.js';
 
 const studentSelect = 'firstName lastName idNumber idNationality grade section schoolLevel';
 
@@ -42,8 +43,8 @@ export const createConfig = async (req, res, next) => {
     const config = new PaymentConfig({
       periodoEscolar: periodoEscolar || req.body.period,
       tipo,
-      fechaInicio: new Date(fechaInicio),
-      fechaFin: new Date(fechaFin),
+      fechaInicio: parseDateOnlyInput(fechaInicio),
+      fechaFin: parseDateOnlyInput(fechaFin),
       montoUsd: montoUsd != null ? Number(montoUsd) : 0,
       activo: activo !== false,
     });
@@ -56,9 +57,12 @@ export const createConfig = async (req, res, next) => {
 
 export const updateConfig = async (req, res, next) => {
   try {
+    const patch = { ...req.body };
+    if (patch.fechaInicio != null && patch.fechaInicio !== '') patch.fechaInicio = parseDateOnlyInput(patch.fechaInicio);
+    if (patch.fechaFin != null && patch.fechaFin !== '') patch.fechaFin = parseDateOnlyInput(patch.fechaFin);
     const config = await PaymentConfig.findByIdAndUpdate(
       req.params.id,
-      { $set: req.body },
+      { $set: patch },
       { new: true }
     );
     if (!config) return res.status(404).json({ ok: false, message: 'Configuración no encontrada.' });
@@ -88,7 +92,7 @@ export const createCutOff = async (req, res, next) => {
     const cut = new CutOffDate({
       config,
       period: period || null,
-      fechaCorte: new Date(fechaCorte),
+      fechaCorte: parseDateOnlyInput(fechaCorte),
       montoUsd: montoUsd != null ? Number(montoUsd) : 0,
       activo: activo !== false,
     });
@@ -102,7 +106,9 @@ export const createCutOff = async (req, res, next) => {
 
 export const updateCutOff = async (req, res, next) => {
   try {
-    const cut = await CutOffDate.findByIdAndUpdate(req.params.id, { $set: req.body }, { new: true }).populate('config').lean();
+    const patch = { ...req.body };
+    if (patch.fechaCorte != null && patch.fechaCorte !== '') patch.fechaCorte = parseDateOnlyInput(patch.fechaCorte);
+    const cut = await CutOffDate.findByIdAndUpdate(req.params.id, { $set: patch }, { new: true }).populate('config').lean();
     if (!cut) return res.status(404).json({ ok: false, message: 'Fecha de corte no encontrada.' });
     res.json({ ok: true, data: cut });
   } catch (err) {
