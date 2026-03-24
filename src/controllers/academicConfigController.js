@@ -33,6 +33,9 @@ function buildPayload(body = {}) {
     grados: Array.isArray(grados)
       ? grados.map((g) => ({
           nombre: g.nombre,
+          schoolLevel: ['PREESCOLAR', 'PRIMARIA', 'LICEO'].includes(g.schoolLevel)
+            ? g.schoolLevel
+            : 'PRIMARIA',
           secciones: Array.isArray(g.secciones) ? g.secciones : [],
         }))
       : [],

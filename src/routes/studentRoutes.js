@@ -14,6 +14,13 @@ router.use(authenticate);
 router.get('/', requirePermission('ESTUDIANTES_LISTA'), student.list);
 router.get('/quota', requirePermission('ESTUDIANTES_LISTA'), student.quotaStatus);
 router.get('/report/pdf', requirePermission('ESTUDIANTES_LISTA'), student.reportPdf);
+router.get(
+  '/:id/student-card/pdf',
+  requirePermission('ESTUDIANTES_LISTA'),
+  param('id').isMongoId(),
+  validate,
+  student.studentCardPdf
+);
 router.get('/:id', requirePermission('ESTUDIANTES_LISTA'), param('id').isMongoId(), validate, student.getOne);
 router.post('/', requirePermission('ESTUDIANTES_REGISTRO'), createStudentValidator, validate, student.create);
 router.put('/:id', requirePermission('ESTUDIANTES_MODIFICACION'), updateStudentValidator, validate, student.update);

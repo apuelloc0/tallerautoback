@@ -2,9 +2,9 @@ import Student from '../models/Student.js';
 import Payment from '../models/Payment.js';
 import CutOffDate from '../models/CutOffDate.js';
 import AcademicConfig from '../models/AcademicConfig.js';
-import Grade from '../models/Grade.js';
 import User from '../models/User.js';
 import PDFDocument from 'pdfkit';
+import { loadInstitutionGeneral, drawReportHeader, drawGeneratedFooter } from '../utils/reportLayout.js';
 
 class BaseReport {
   async getData(req) {
@@ -19,7 +19,15 @@ class BaseReport {
     return { margin: 50 };
   }
 
-  writePdf(doc, data) {
+  getReportTitle() {
+    return 'Reporte';
+  }
+
+  getReportSubtitle(_data) {
+    return '';
+  }
+
+  writePdf(doc, data, institution) {
     throw new Error('writePdf must be implemented by subclasses');
   }
 
@@ -31,17 +39,33 @@ class BaseReport {
   async handle(req, res, next) {
     try {
       const data = await this.getData(req);
-      const { format } = req.query;
+      const { format, includeHeader } = req.query;
+      const institution = await loadInstitutionGeneral();
 
       if (format === 'pdf') {
         const filename = `${this.getPdfFilenamePrefix()}-${new Date().toISOString().slice(0, 10)}.pdf`;
         this.setPdfHeaders(res, filename);
         const doc = new PDFDocument(this.getPdfOptions());
         doc.pipe(res);
-        this.writePdf(doc, data);
+        drawReportHeader(doc, {
+          institution,
+          reportTitle: this.getReportTitle(),
+          reportSubtitle: this.getReportSubtitle(data),
+        });
+        this.writePdf(doc, data, institution);
+        drawGeneratedFooter(doc);
         doc.end();
       } else {
-        res.json({ ok: true, data });
+        const payload = { ok: true, data };
+        if (includeHeader === '1' || includeHeader === 'true') {
+          payload.header = {
+            generatedAt: new Date().toISOString(),
+            institution,
+            reportTitle: this.getReportTitle(),
+            reportSubtitle: this.getReportSubtitle(data),
+          };
+        }
+        res.json(payload);
       }
     } catch (err) {
       next(err);
@@ -54,12 +78,20 @@ class InstitutionalReport extends BaseReport {
     return 'reporte-institucional';
   }
 
+  getReportTitle() {
+    return 'Reporte institucional';
+  }
+
+  getReportSubtitle(data) {
+    const st = data.students || {};
+    return `Resumen general — ${st.total ?? 0} estudiantes activos`;
+  }
+
   async getData() {
-    const [studentCount, paymentCount, paymentTotal, gradeCount, cutOffCount] = await Promise.all([
+    const [studentCount, paymentCount, paymentTotal, cutOffCount] = await Promise.all([
       Student.countDocuments({ active: true }),
       Payment.countDocuments(),
       Payment.aggregate([{ $group: { _id: null, bs: { $sum: '$amountBs' }, usd: { $sum: '$amountUsd' } } }]),
-      Grade.countDocuments(),
       CutOffDate.countDocuments({ activo: true }),
     ]);
     const byYearSection = await Student.aggregate([
@@ -71,26 +103,20 @@ class InstitutionalReport extends BaseReport {
     return {
       students: { total: studentCount, byYearSection },
       payments: { total: paymentCount, totalBs: totals.bs, totalUsd: totals.usd },
-      grades: gradeCount,
       cutOffDates: cutOffCount,
     };
   }
 
   writePdf(doc, data) {
-    doc.fontSize(16).text('Reporte institucional', { align: 'center' });
-    doc.fontSize(10).text(new Date().toLocaleString('es'), { align: 'center' });
-    doc.moveDown(1);
     const st = data.students || {};
     const pay = data.payments || {};
-    doc.fontSize(11).text(`Estudiantes total: ${st.total}`, { continued: false });
+    doc.fontSize(11).font('Helvetica');
+    doc.text(`Estudiantes total: ${st.total}`, { continued: false });
     doc.text(
       `Pagos (registros): ${pay.total}  —  Total Bs: ${pay.totalBs ?? 0}  —  Total USD: ${pay.totalUsd ?? 0}`,
       { continued: false }
     );
-    doc.text(
-      `Notas registradas: ${data.grades ?? 0}  —  Fechas de corte activas: ${data.cutOffDates ?? 0}`,
-      { continued: false }
-    );
+    doc.text(`Fechas de corte activas: ${data.cutOffDates ?? 0}`, { continued: false });
     doc.moveDown(0.5);
     doc.fontSize(10).text('Por grado y sección', { continued: false });
     doc.moveDown(0.3);
@@ -117,6 +143,14 @@ class OccupancyReport extends BaseReport {
     return 'reporte-ocupacion';
   }
 
+  getReportTitle() {
+    return 'Ocupación y capacidad';
+  }
+
+  getReportSubtitle(data) {
+    return `Total estudiantes: ${data.totalEstudiantes ?? 0} — Ocupación: ${data.ocupacionPorcentaje ?? 0}%`;
+  }
+
   async getData() {
     const academicConfig = await AcademicConfig.findOne().lean();
     const capacity = Number(academicConfig?.capacidadMaxima) || 0;
@@ -132,10 +166,7 @@ class OccupancyReport extends BaseReport {
   }
 
   writePdf(doc, data) {
-    doc.fontSize(16).text('Ocupación y capacidad', { align: 'center' });
-    doc.fontSize(10).text(new Date().toLocaleString('es'), { align: 'center' });
-    doc.moveDown(1.5);
-    doc.fontSize(11);
+    doc.fontSize(11).font('Helvetica');
     doc.text(`Capacidad máxima: ${data.capacidadMaxima}`, { continued: false });
     doc.text(`Total estudiantes: ${data.totalEstudiantes}`, { continued: false });
     doc.text(`Cupos disponibles: ${data.cuposDisponibles}`, { continued: false });
@@ -148,11 +179,19 @@ class EnrollmentByGradeSectionReport extends BaseReport {
     return 'reporte-matricula';
   }
 
+  getReportTitle() {
+    return 'Matrícula por grado y sección';
+  }
+
+  getReportSubtitle(data) {
+    return `Total: ${data.total ?? 0} estudiantes`;
+  }
+
   async getData() {
     const agg = await Student.aggregate([
       { $match: { active: { $ne: false } } },
       { $group: { _id: { grado: '$grade', seccion: '$section' }, count: { $sum: 1 } } },
-      { $sort: { '_id.grade': 1, '_id.section': 1 } },
+      { $sort: { '_id.grado': 1, '_id.seccion': 1 } },
     ]);
     const rows = agg.map((a) => ({
       grado: a._id.grado || '—',
@@ -164,11 +203,6 @@ class EnrollmentByGradeSectionReport extends BaseReport {
   }
 
   writePdf(doc, data) {
-    doc.fontSize(16).text('Matrícula por grado y sección', { align: 'center' });
-    doc
-      .fontSize(10)
-      .text(`Total: ${data.total} estudiantes — ${new Date().toLocaleString('es')}`, { align: 'center' });
-    doc.moveDown(1);
     let y = doc.y;
     doc.font('Helvetica-Bold').fontSize(10);
     doc.text('Grado', 50, y);
@@ -192,6 +226,15 @@ class UsersRolesReport extends BaseReport {
     return 'reporte-usuarios-roles';
   }
 
+  getReportTitle() {
+    return 'Usuarios y roles';
+  }
+
+  getReportSubtitle(data) {
+    const n = Array.isArray(data) ? data.length : 0;
+    return `${n} usuario(s) registrado(s)`;
+  }
+
   getPdfOptions() {
     return { margin: 50, size: 'A4', layout: 'landscape' };
   }
@@ -210,9 +253,6 @@ class UsersRolesReport extends BaseReport {
   }
 
   writePdf(doc, data) {
-    doc.fontSize(16).text('Usuarios y roles', { align: 'center' });
-    doc.fontSize(10).text(new Date().toLocaleString('es'), { align: 'center' });
-    doc.moveDown(1);
     const w = [120, 180, 100, 60];
     let y = doc.y;
     doc.font('Helvetica-Bold').fontSize(9);
@@ -225,6 +265,10 @@ class UsersRolesReport extends BaseReport {
     y += 6;
     doc.font('Helvetica').fontSize(9);
     data.forEach((r) => {
+      if (y > doc.page.height - 55) {
+        doc.addPage({ size: 'A4', layout: 'landscape', margin: 50 });
+        y = 50;
+      }
       doc.text(String(r.usuario ?? '—').slice(0, 25), 50, y, { width: w[0] });
       doc.text(String(r.nombreCompleto ?? '—').slice(0, 35), 170, y, { width: w[1] });
       doc.text(String(r.rol ?? '—'), 350, y, { width: w[2] });
@@ -239,14 +283,10 @@ const occupancyReport = new OccupancyReport();
 const enrollmentReport = new EnrollmentByGradeSectionReport();
 const usersRolesReport = new UsersRolesReport();
 
-/** Reporte institucional: resumen general. JSON o PDF (format=pdf). */
 export const institutional = (req, res, next) => institutionalReport.handle(req, res, next);
 
-/** Ocupación y capacidad. JSON o PDF. */
 export const occupancy = (req, res, next) => occupancyReport.handle(req, res, next);
 
-/** Matrícula por grado y sección. JSON o PDF. */
 export const enrollmentByGradeSection = (req, res, next) => enrollmentReport.handle(req, res, next);
 
-/** Usuarios y roles. JSON o PDF. */
 export const usersRoles = (req, res, next) => usersRolesReport.handle(req, res, next);

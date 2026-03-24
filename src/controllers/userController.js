@@ -39,14 +39,9 @@ export const verifySecurityAnswers = async (req, res, next) => {
     }
     const normalized = (s) => String(s || '').toLowerCase().trim();
     const allMatch = req.body.answers.every(
-      (a) => {
-        console.log('a', a);
-        console.log('user.securityQuestions[a.index]', user.securityQuestions[a.index]);
-        console.log('normalized(user.securityQuestions[a.index].answer)', normalized(user.securityQuestions[a.index].answer));
-        console.log('normalized(a.answer)', normalized(a.answer));
-        return user.securityQuestions[a.index] &&
-          normalized(user.securityQuestions[a.index].answer) === normalized(a.answer)
-      }
+      (a) =>
+        user.securityQuestions[a.index] &&
+        normalized(user.securityQuestions[a.index].answer) === normalized(a.answer)
     );
     if (!allMatch || req.body.answers.length !== user.securityQuestions.length) {
       return res.status(401).json({ ok: false, message: 'Respuestas incorrectas.' });

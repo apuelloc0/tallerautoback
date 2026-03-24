@@ -28,6 +28,12 @@ const periodSchema = new mongoose.Schema(
 const gradeSchema = new mongoose.Schema(
   {
     nombre: { type: String, required: true, trim: true },
+    /** PREESCOLAR | PRIMARIA | LICEO (Bachillerato usa LICEO) */
+    schoolLevel: {
+      type: String,
+      enum: ['PREESCOLAR', 'PRIMARIA', 'LICEO'],
+      default: 'PRIMARIA',
+    },
     secciones: { type: [String], default: [] },
   },
   { _id: false }
@@ -50,6 +56,8 @@ const generalConfigSchema = new mongoose.Schema(
     direccion: { type: String, trim: true, default: '' },
     ciudad: { type: String, trim: true, default: 'Caracas' },
     idioma: { type: String, trim: true, default: 'es' },
+    /** Ruta pública servida por el API, ej. /uploads/institution-logo/xxx.png */
+    logoUrl: { type: String, trim: true, default: '' },
   },
   { _id: false }
 );

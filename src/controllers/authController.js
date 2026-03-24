@@ -32,7 +32,8 @@ export const login = async (req, res, next) => {
 
 export const me = async (req, res, next) => {
   try {
-    res.json({ ok: true, user: req.user });
+    const user = req.user?.toJSON ? req.user.toJSON() : req.user;
+    return res.json({ ok: true, user });
   } catch (err) {
     next(err);
   }

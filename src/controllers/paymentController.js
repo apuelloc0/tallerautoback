@@ -7,8 +7,9 @@ import Receipt from '../models/Receipt.js';
 import { getPublicPath } from '../config/upload.js';
 import PDFDocument from 'pdfkit';
 import mongoose from 'mongoose';
+import { loadInstitutionGeneral, drawReportHeader, drawGeneratedFooter } from '../utils/reportLayout.js';
 
-const studentSelect = 'firstName lastName idNumber grade section';
+const studentSelect = 'firstName lastName idNumber idNationality grade section schoolLevel';
 
 /** Monto esperado por alumno y corte (considera beca total, parcial y exoneración) */
 function getExpectedAmount(student, cutOff) {
@@ -413,11 +414,14 @@ export const reportPdf = async (req, res, next) => {
     const filename = `reporte-pagos-${new Date().toISOString().slice(0, 10)}.pdf`;
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    const institution = await loadInstitutionGeneral();
     const doc = new PDFDocument({ margin: 40, size: 'A4', layout: 'landscape' });
     doc.pipe(res);
-    doc.fontSize(14).text('Reporte de pagos', { align: 'center' });
-    doc.fontSize(10).text(`${payments.length} transacciones — ${new Date().toLocaleString('es')}`, { align: 'center' });
-    doc.moveDown(1);
+    drawReportHeader(doc, {
+      institution,
+      reportTitle: 'Reporte de pagos',
+      reportSubtitle: `${payments.length} transacciones`,
+    });
     const w = [50, 90, 55, 70, 70, 90, 80];
     const headers = ['#', 'Fecha', 'Método', 'USD', 'Bs', 'Ref.', 'Descripción'];
     let y = doc.y;
@@ -446,6 +450,7 @@ export const reportPdf = async (req, res, next) => {
       row.forEach((cell, i) => { doc.text(String(cell), x, y, { width: w[i] }); x += w[i] + 4; });
       y += 10;
     });
+    drawGeneratedFooter(doc);
     doc.end();
   } catch (err) {
     if (!res.headersSent) next(err);
@@ -465,12 +470,14 @@ export const receiptPdf = async (req, res, next) => {
     const filename = `recibo-${payment._id}-${new Date().toISOString().slice(0, 10)}.pdf`;
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    const institution = await loadInstitutionGeneral();
     const doc = new PDFDocument({ margin: 50 });
     doc.pipe(res);
-    doc.fontSize(18).text('Recibo de pago', { align: 'center' });
-    doc.moveDown(0.5);
-    doc.fontSize(10).text(`Fecha: ${payment.paidAt ? new Date(payment.paidAt).toLocaleString('es') : '—'}`, { align: 'center' });
-    doc.moveDown(1);
+    drawReportHeader(doc, {
+      institution,
+      reportTitle: 'Recibo de pago',
+      reportSubtitle: payment.paidAt ? new Date(payment.paidAt).toLocaleString('es') : '',
+    });
     doc.fontSize(11);
     doc.text(`Forma de pago: ${payment.paymentMethod || '—'}`, { continued: false });
     doc.text(`Tipo: ${payment.paymentType === 'usd' ? 'USD' : 'Bs'}`, { continued: false });
@@ -502,6 +509,7 @@ export const receiptPdf = async (req, res, next) => {
     });
     doc.moveDown(0.5);
     doc.font('Helvetica-Bold').text(`Total transacción: $${(payment.amountUsd || 0).toFixed(2)} USD / ${(payment.amountBs || 0).toFixed(2)} Bs`, { continued: false });
+    drawGeneratedFooter(doc);
     doc.end();
   } catch (err) {
     if (!res.headersSent) next(err);
