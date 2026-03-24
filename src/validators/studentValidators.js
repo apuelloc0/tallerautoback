@@ -75,7 +75,7 @@ export const createStudentValidator = [
   body('firstName').trim().notEmpty().withMessage('Nombres requeridos'),
   body('lastName').trim().notEmpty().withMessage('Apellidos requeridos'),
   body('idNationality').optional().isIn(idNat).withMessage('Tipo de documento invalido (V o E)'),
-  ciDigits('idNumber', true),
+  ciDigits('idNumber', false),
   body('birthDate').optional().isISO8601().withMessage('Fecha de nacimiento invalida'),
   body('gender').optional().isIn(genderValues).withMessage('Sexo invalido'),
   body('address').optional().trim(),

@@ -48,7 +48,7 @@ const studentSchema = new mongoose.Schema(
     firstName: { type: String, required: true, trim: true },
     lastName: { type: String, required: true, trim: true },
     idNationality: { type: String, enum: ['V', 'E'], default: 'V' },
-    idNumber: { type: String, required: true, trim: true },
+    idNumber: { type: String, trim: true, default: '' },
     birthDate: { type: Date },
     gender: { type: String, enum: ['masculino', 'femenino', ''], default: '' },
     age: { type: Number },
