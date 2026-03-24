@@ -9,10 +9,23 @@ export function getUploadRoot() {
   return process.env.UPLOAD_PATH || path.join(__dirname, '..', '..', 'uploads');
 }
 
+function getFixedPdfLogoPath() {
+  const candidates = [
+    // Ruta esperada por el usuario (repo frontend en workspace hermano)
+    path.join(__dirname, '..', '..', '..', 'students', 'client', 'src', 'pages', 'logo2.png'),
+    // Fallback si ambos repos viven dentro de un workspace superior
+    path.join(__dirname, '..', '..', '..', '..', 'students', 'client', 'src', 'pages', 'logo2.png'),
+  ];
+  return candidates.find((p) => fs.existsSync(p)) || null;
+}
+
 /**
  * logoUrl guardada como /uploads/sub/file.ext → ruta absoluta para PDFKit.
  */
 export function resolveLogoAbsolutePath(logoUrl) {
+  // Requisito: en PDF siempre usar logo2.png fijo
+  const fixed = getFixedPdfLogoPath();
+  if (fixed) return fixed;
   if (!logoUrl || typeof logoUrl !== 'string') return null;
   const trimmed = logoUrl.trim();
   if (!trimmed.startsWith('/uploads/')) return null;
