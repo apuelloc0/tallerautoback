@@ -61,8 +61,27 @@ const STUDENT_BODY_FIELDS = [
   'motherFirstName', 'motherLastName', 'motherIdNationality', 'motherIdNumber', 'motherPhone', 'motherEmail', 'motherProfession',
   'fatherFirstName', 'fatherLastName', 'fatherIdNationality', 'fatherIdNumber', 'fatherPhone', 'fatherEmail', 'fatherProfession',
   'studentPhotoUrl', 'representativePhotoUrl',
-  'age', 'aula', 'paymentConfig', 'active', 'studentCardNumber',
+  'age', 'aula', 'paymentConfig', 'active', 'childNumber', 'studentCardNumber', 'healthInfo',
 ];
+
+async function checkDuplicateIdWarning(idNumber, idNationality, excludeId = null) {
+  if (!idNumber || String(idNumber).trim() === '') return null;
+  const filter = { idNumber: String(idNumber).trim(), idNationality: idNationality || 'V' };
+  if (excludeId) filter._id = { $ne: excludeId };
+  const existing = await Student.find(filter)
+    .select('firstName lastName grade section schoolLevel')
+    .lean();
+  if (existing.length === 0) return null;
+  const ci = `${idNationality || 'V'}-${String(idNumber).trim()}`;
+  const names = existing
+    .map((s) => {
+      const name = [s.firstName, s.lastName].filter(Boolean).join(' ');
+      const loc = [s.schoolLevel, s.grade, s.section].filter(Boolean).join(' ');
+      return loc ? `${name} (${loc})` : name;
+    })
+    .join(', ');
+  return `Advertencia: la cédula ${ci} ya está registrada en ${existing.length} estudiante(s): ${names}.`;
+}
 
 const pickBody = (body) => {
   const picked = {};
@@ -156,6 +175,8 @@ function syncLegalRepresentativeForPayments(data) {
 
 function applyStudentCardNumber(data) {
   if (data.schoolLevel !== SCHOOL_LEVEL.PREESCOLAR && data.schoolLevel !== SCHOOL_LEVEL.PRIMARIA) return;
+  // If the frontend already sent a manually-set studentCardNumber, keep it as-is
+  if (data.studentCardNumber && String(data.studentCardNumber).trim() !== '') return;
   const card = computeStudentCardNumber(data);
   if (card) data.studentCardNumber = card;
 }
@@ -181,11 +202,12 @@ export const create = async (req, res, next) => {
       return res.status(e.statusCode || 400).json({ ok: false, message: e.message });
     }
     applyStudentCardNumber(data);
+    const dupWarning = await checkDuplicateIdWarning(data.idNumber, data.idNationality);
     const student = new Student(data);
     await student.save();
-    res.status(201).json({ ok: true, data: student, message: 'Estudiante registrado.' });
+    const warnings = dupWarning ? [dupWarning] : [];
+    res.status(201).json({ ok: true, data: student, message: 'Estudiante registrado.', warnings });
   } catch (err) {
-    console.log('ERROR CREATE STUDENT: 1111', err);
     if (err.code === 11000) {
       return res.status(400).json({ ok: false, message: 'Ya existe un estudiante con ese numero de identidad.' });
     }
@@ -225,25 +247,15 @@ export const update = async (req, res, next) => {
       { $set: data },
       { new: true, runValidators: true }
     );
-    if (
-      student &&
-      (student.schoolLevel === SCHOOL_LEVEL.PREESCOLAR || student.schoolLevel === SCHOOL_LEVEL.PRIMARIA)
-    ) {
-      const card = computeStudentCardNumber(student.toObject());
-      if (card && card !== student.studentCardNumber) {
-        student = await Student.findByIdAndUpdate(
-          req.params.id,
-          { $set: { studentCardNumber: card } },
-          { new: true, runValidators: true }
-        );
-      }
-    }
+    // studentCardNumber is sent from the frontend already (after applyStudentCardNumber ran on data).
+    // No secondary auto-compute needed here.
     if (!student) {
       return res.status(404).json({ ok: false, message: 'Estudiante no encontrado.' });
     }
-    res.json({ ok: true, data: student, message: 'Estudiante actualizado.' });
+    const dupWarning = await checkDuplicateIdWarning(data.idNumber, data.idNationality, req.params.id);
+    const warnings = dupWarning ? [dupWarning] : [];
+    res.json({ ok: true, data: student, message: 'Estudiante actualizado.', warnings });
   } catch (err) {
-    console.log('ERROR UPDATE STUDENT: ', err);
     if (err.code === 11000) {
       return res.status(400).json({ ok: false, message: 'Ya existe un estudiante con ese numero de identidad.' });
     }
@@ -522,6 +534,166 @@ export const studentCardPdf = async (req, res, next) => {
     doc.fillColor('#000000');
 
     doc.y = Math.max(doc.y, photoY + photoSize) + 24;
+    drawGeneratedFooter(doc);
+    doc.end();
+  } catch (err) {
+    if (!res.headersSent) next(err);
+  }
+};
+
+/** PDF constancia de inscripción — formato carta oficial */
+export const enrollmentCertificatePdf = async (req, res, next) => {
+  try {
+    const student = await Student.findById(req.params.id).lean();
+    if (!student) return res.status(404).json({ ok: false, message: 'Estudiante no encontrado.' });
+    const institution = await loadInstitutionGeneral();
+
+    const filename = `constancia-inscripcion-${student._id}-${new Date().toISOString().slice(0, 10)}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    const doc = new PDFDocument({ margin: 60, size: 'A4' });
+    doc.pipe(res);
+
+    // ── Membrete institucional ───────────────────────────────────────────
+    drawReportHeader(doc, { institution, reportTitle: '', reportSubtitle: '' });
+
+    const left = doc.page.margins.left;
+    const right = doc.page.margins.right;
+    const usableW = doc.page.width - left - right;
+    const fontSize = 11.5;
+
+    // ── Título ───────────────────────────────────────────────────────────
+    doc.moveDown(1.2);
+    doc.font('Helvetica-BoldOblique')
+      .fontSize(15)
+      .fillColor('#000000')
+      .text('CONSTANCIA DE INSCRIPCIÓN.', left, doc.y, {
+        align: 'center',
+        width: usableW,
+        underline: true,
+      });
+    doc.moveDown(1.8);
+
+    // ── Datos auxiliares ─────────────────────────────────────────────────
+    const studentName = [student.firstName, student.lastName].filter(Boolean).join(' ');
+    const studentCI = formatStudentIdDisplay(student);
+    const ciText = student.idNumber ? studentCI : 'S/C';
+
+    const LEVEL_TEXT = {
+      PREESCOLAR: 'EDUCACIÓN INICIAL',
+      PRIMARIA: 'EDUCACIÓN PRIMARIA',
+      LICEO: 'EDUCACIÓN MEDIA GENERAL',
+    };
+    const levelText = LEVEL_TEXT[student.schoolLevel] || (student.schoolLevel || 'EDUCACIÓN');
+    const gradeText = student.grade || '___';
+
+    const dirFullId = institution.directorIdNumber
+      ? `${institution.directorIdNationality || 'V'}- ${institution.directorIdNumber}`
+      : '___';
+    const dirFullName = [institution.directorTitle, institution.directorName].filter(Boolean).join(' ') || '___';
+    const instName = institution.nombreInstitucion || '___';
+    const ciudad = institution.ciudad || '___';
+    const estado = institution.estado || '';
+    const municipio = institution.municipio || '';
+
+    // Período escolar: usar año activo o derivar del año de inscripción
+    let periodoEscolar = institution.activeSchoolYear || '';
+    if (!periodoEscolar && student.enrollmentDate) {
+      const yr = new Date(student.enrollmentDate).getFullYear();
+      periodoEscolar = `${yr}-${yr + 1}`;
+    }
+    if (!periodoEscolar) {
+      const yr = new Date().getFullYear();
+      periodoEscolar = `${yr}-${yr + 1}`;
+    }
+
+    // ── Párrafo principal (texto justificado con bold inline) ─────────────
+    const paraOpts = { align: 'justify', width: usableW, lineGap: 3 };
+    const bold = (txt, extra = {}) =>
+      doc.font('Helvetica-Bold').fontSize(fontSize).text(txt, { continued: true, ...paraOpts, ...extra });
+    const reg = (txt, extra = {}) =>
+      doc.font('Helvetica').fontSize(fontSize).text(txt, { continued: true, ...paraOpts, ...extra });
+
+    doc.font('Helvetica').fontSize(fontSize).fillColor('#000000');
+
+    reg('Quien Suscribe, ');
+    bold(dirFullName);
+    reg(' Titular de la Cedula de Identidad Nº ');
+    bold(dirFullId);
+    reg(` ${institution.directorRole || 'Director(a)'} de la `);
+    bold(`"${instName}"`);
+
+    // Construir la parte de ubicación
+    let ubicacion = `que funciona en ${ciudad}`;
+    if (municipio) ubicacion += `, ${municipio}`;
+    if (estado) ubicacion += `, del Estado ${estado}`;
+    reg(`, ${ubicacion}, hace constar por medio de la presente que (la) o el Estudiante: `);
+
+    // Nombre del estudiante subrayado
+    doc.font('Helvetica-Bold').fontSize(fontSize).text(studentName, {
+      continued: true,
+      underline: true,
+      ...paraOpts,
+    });
+
+    reg(', Cedula de Identidad ');
+    bold(ciText);
+    reg(' está inscrito(a) en este plantel para cursar: ');
+    bold(gradeText);
+    reg(' de ');
+    doc.font('Helvetica-Bold').fontSize(fontSize).text(levelText, {
+      continued: true,
+      underline: true,
+      ...paraOpts,
+    });
+    // Último segmento — sin continued para cerrar el párrafo
+    doc.font('Helvetica').fontSize(fontSize).text(`, para el Período Escolar: ${periodoEscolar}.`, {
+      ...paraOpts,
+      continued: false,
+    });
+
+    doc.moveDown(1.8);
+
+    // ── Párrafo de expedición ─────────────────────────────────────────────
+    doc.font('Helvetica').fontSize(fontSize).text(
+      `Constancia que se expide a petición de parte interesada en la Ciudad de `,
+      left, doc.y,
+      { continued: true, align: 'left', width: usableW }
+    );
+    doc.font('Helvetica-Bold').fontSize(fontSize).text(`${ciudad} `, { continued: true });
+    doc.font('Helvetica').fontSize(fontSize).text(
+      `a los ______ días del mes de ______________ de ________.`,
+      { continued: false }
+    );
+
+    doc.moveDown(3.5);
+
+    // ── Bloque de firma ───────────────────────────────────────────────────
+    const sigW = 200;
+    const sigX = left + usableW / 2 - sigW / 2;
+    const sigY = doc.y;
+
+    doc.moveTo(sigX, sigY).lineTo(sigX + sigW, sigY).strokeColor('#000000').lineWidth(1).stroke();
+    doc.moveDown(0.35);
+
+    const sigTextOpts = { align: 'center', width: usableW };
+    if (institution.directorName) {
+      doc.font('Helvetica-Bold').fontSize(10).text(
+        [institution.directorTitle, institution.directorName].filter(Boolean).join(' '),
+        left, doc.y, sigTextOpts
+      );
+    }
+    doc.font('Helvetica-Bold').fontSize(10).text(
+      institution.directorRole || 'DIRECTOR(A)',
+      left, doc.y, sigTextOpts
+    );
+    doc.font('Helvetica').fontSize(9).fillColor('#333333');
+    if (institution.direccion) doc.text(institution.direccion.toUpperCase(), left, doc.y, sigTextOpts);
+    if (institution.telefono) doc.text(`TELÉFONO: ${institution.telefono}`, left, doc.y, sigTextOpts);
+    if (institution.rif) doc.text(`R.I.F: ${institution.rif}`, left, doc.y, sigTextOpts);
+
+    doc.fillColor('#000000');
     drawGeneratedFooter(doc);
     doc.end();
   } catch (err) {

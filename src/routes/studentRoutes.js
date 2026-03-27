@@ -21,6 +21,13 @@ router.get(
   validate,
   student.studentCardPdf
 );
+router.get(
+  '/:id/enrollment-certificate/pdf',
+  requirePermission('ESTUDIANTES_LISTA'),
+  param('id').isMongoId(),
+  validate,
+  student.enrollmentCertificatePdf
+);
 router.get('/:id', requirePermission('ESTUDIANTES_LISTA'), param('id').isMongoId(), validate, student.getOne);
 router.post('/', requirePermission('ESTUDIANTES_REGISTRO'), createStudentValidator, validate, student.create);
 router.put('/:id', requirePermission('ESTUDIANTES_MODIFICACION'), updateStudentValidator, validate, student.update);

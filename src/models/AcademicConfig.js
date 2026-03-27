@@ -55,9 +55,18 @@ const generalConfigSchema = new mongoose.Schema(
     email: { type: String, trim: true, default: '' },
     direccion: { type: String, trim: true, default: '' },
     ciudad: { type: String, trim: true, default: 'Caracas' },
+    estado: { type: String, trim: true, default: '' },
+    municipio: { type: String, trim: true, default: '' },
+    codigoInstitucion: { type: String, trim: true, default: '' },
     idioma: { type: String, trim: true, default: 'es' },
     /** Ruta pública servida por el API, ej. /uploads/institution-logo/xxx.png */
     logoUrl: { type: String, trim: true, default: '' },
+    /** Datos del director/directora para constancias */
+    directorTitle: { type: String, trim: true, default: '' },
+    directorName: { type: String, trim: true, default: '' },
+    directorIdNationality: { type: String, trim: true, default: 'V' },
+    directorIdNumber: { type: String, trim: true, default: '' },
+    directorRole: { type: String, trim: true, default: 'DIRECTOR(A)' },
   },
   { _id: false }
 );

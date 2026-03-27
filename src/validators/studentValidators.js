@@ -16,6 +16,21 @@ const idNat = ['V', 'E'];
 const escapedPrefixes = PHONE_PREFIXES.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
 const phoneRegex = new RegExp(`^(${escapedPrefixes.join('|')})\\d{${PHONE_LOCAL_DIGITS}}$`);
 
+/** Solo letras (incluyendo acentos, ñ, ü), espacios, guion y apóstrofo */
+const NAME_REGEX = /^[A-Za-záéíóúÁÉÍÓÚàèìòùÀÈÌÒÙäëïöüÄËÏÖÜñÑçÇ' -]+$/;
+
+const nameField = (field, label, required = false) => {
+  const chain = body(field).trim();
+  if (required) {
+    return chain
+      .notEmpty().withMessage(`${label} requerido`)
+      .matches(NAME_REGEX).withMessage(`${label}: solo se permiten letras`);
+  }
+  return chain
+    .optional({ values: 'falsy' })
+    .matches(NAME_REGEX).withMessage(`${label}: solo se permiten letras`);
+};
+
 const ciDigits = (field, required = false) => {
   const chain = body(field).trim();
   if (required) {
@@ -52,8 +67,8 @@ const phoneField = (field, required = false) => {
 };
 
 const guardianNested = (prefix) => [
-  body(`${prefix}.firstName`).optional().trim(),
-  body(`${prefix}.lastName`).optional().trim(),
+  body(`${prefix}.firstName`).optional().trim().matches(NAME_REGEX).withMessage(`Nombres del representante: solo letras`),
+  body(`${prefix}.lastName`).optional().trim().matches(NAME_REGEX).withMessage(`Apellidos del representante: solo letras`),
   body(`${prefix}.idNationality`).optional().isIn(idNat),
   body(`${prefix}.idNumber`)
     .optional({ values: 'falsy' })
@@ -72,8 +87,8 @@ const guardianNested = (prefix) => [
 ];
 
 export const createStudentValidator = [
-  body('firstName').trim().notEmpty().withMessage('Nombres requeridos'),
-  body('lastName').trim().notEmpty().withMessage('Apellidos requeridos'),
+  nameField('firstName', 'Nombres', true),
+  nameField('lastName', 'Apellidos', true),
   body('idNationality').optional().isIn(idNat).withMessage('Tipo de documento invalido (V o E)'),
   ciDigits('idNumber', false),
   body('birthDate').optional().isISO8601().withMessage('Fecha de nacimiento invalida'),
@@ -93,8 +108,8 @@ export const createStudentValidator = [
   body('father').optional().isObject(),
   ...guardianNested('mother'),
   ...guardianNested('father'),
-  body('representativeFirstName').optional().trim(),
-  body('representativeLastName').optional().trim(),
+  body('representativeFirstName').optional().trim().matches(NAME_REGEX).withMessage('Nombres del representante: solo letras'),
+  body('representativeLastName').optional().trim().matches(NAME_REGEX).withMessage('Apellidos del representante: solo letras'),
   body('representativeIdNationality').optional().isIn(idNat),
   ciDigits('representativeIdNumber', false),
   body('representativeRelationship').optional().isIn(relationshipValues).withMessage('Parentesco invalido'),
@@ -108,12 +123,19 @@ export const createStudentValidator = [
   body('paymentConfig').optional().isObject(),
   body('studentCardNumber').optional().trim(),
   body('active').optional().isBoolean(),
+  body('healthInfo').optional().isObject(),
+  body('healthInfo.hasCondition').optional().isBoolean(),
+  body('healthInfo.conditionDetails').optional().trim().isLength({ max: 500 }),
+  body('healthInfo.hasAllergies').optional().isBoolean(),
+  body('healthInfo.allergiesDetails').optional().trim().isLength({ max: 500 }),
+  body('healthInfo.medications').optional().trim().isLength({ max: 500 }),
+  body('healthInfo.emergencyNotes').optional().trim().isLength({ max: 500 }),
 ];
 
 export const updateStudentValidator = [
   param('id').isMongoId().withMessage('ID invalido'),
-  body('firstName').optional().trim().notEmpty(),
-  body('lastName').optional().trim().notEmpty(),
+  nameField('firstName', 'Nombres'),
+  nameField('lastName', 'Apellidos'),
   body('idNationality').optional().isIn(idNat),
   ciDigits('idNumber', false),
   body('birthDate').optional().isISO8601(),
@@ -133,8 +155,8 @@ export const updateStudentValidator = [
   body('father').optional().isObject(),
   ...guardianNested('mother'),
   ...guardianNested('father'),
-  body('representativeFirstName').optional().trim(),
-  body('representativeLastName').optional().trim(),
+  body('representativeFirstName').optional().trim().matches(NAME_REGEX).withMessage('Nombres del representante: solo letras'),
+  body('representativeLastName').optional().trim().matches(NAME_REGEX).withMessage('Apellidos del representante: solo letras'),
   body('representativeIdNationality').optional().isIn(idNat),
   ciDigits('representativeIdNumber', false),
   body('representativeRelationship').optional().isIn(relationshipValues),
@@ -148,4 +170,11 @@ export const updateStudentValidator = [
   body('paymentConfig').optional().isObject(),
   body('studentCardNumber').optional().trim(),
   body('active').optional().isBoolean(),
+  body('healthInfo').optional().isObject(),
+  body('healthInfo.hasCondition').optional().isBoolean(),
+  body('healthInfo.conditionDetails').optional().trim().isLength({ max: 500 }),
+  body('healthInfo.hasAllergies').optional().isBoolean(),
+  body('healthInfo.allergiesDetails').optional().trim().isLength({ max: 500 }),
+  body('healthInfo.medications').optional().trim().isLength({ max: 500 }),
+  body('healthInfo.emergencyNotes').optional().trim().isLength({ max: 500 }),
 ];

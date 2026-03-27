@@ -37,6 +37,7 @@ export function resolveLogoAbsolutePath(logoUrl) {
 export async function loadInstitutionGeneral() {
   const doc = await AcademicConfig.findOne().lean();
   const g = doc?.general && typeof doc.general === 'object' ? doc.general : {};
+  const activeYear = (doc?.anosEscolares || []).find((a) => a.activo)?.nombre || '';
   return {
     nombreInstitucion: String(g.nombreInstitucion || 'Unidad Educativa Privada').trim(),
     rif: String(g.rif || '').trim(),
@@ -44,7 +45,16 @@ export async function loadInstitutionGeneral() {
     email: String(g.email || '').trim(),
     direccion: String(g.direccion || '').trim(),
     ciudad: String(g.ciudad || 'Caracas').trim(),
+    estado: String(g.estado || '').trim(),
+    municipio: String(g.municipio || '').trim(),
+    codigoInstitucion: String(g.codigoInstitucion || '').trim(),
     logoUrl: String(g.logoUrl || '').trim(),
+    directorTitle: String(g.directorTitle || '').trim(),
+    directorName: String(g.directorName || '').trim(),
+    directorIdNationality: String(g.directorIdNationality || 'V').trim(),
+    directorIdNumber: String(g.directorIdNumber || '').trim(),
+    directorRole: String(g.directorRole || 'DIRECTOR(A)').trim(),
+    activeSchoolYear: activeYear,
   };
 }
 

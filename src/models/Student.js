@@ -27,6 +27,18 @@ const representativeSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const healthInfoSchema = new mongoose.Schema(
+  {
+    hasCondition: { type: Boolean, default: false },
+    conditionDetails: { type: String, trim: true, default: '' },
+    hasAllergies: { type: Boolean, default: false },
+    allergiesDetails: { type: String, trim: true, default: '' },
+    medications: { type: String, trim: true, default: '' },
+    emergencyNotes: { type: String, trim: true, default: '' },
+  },
+  { _id: false }
+);
+
 const paymentConfigRefSchema = new mongoose.Schema(
   {
     hasFullScholarship: { type: Boolean, default: false },
@@ -72,7 +84,9 @@ const studentSchema = new mongoose.Schema(
     paymentConfig: { type: paymentConfigRefSchema, default: () => ({}) },
     expedientUrl: { type: String },
     /** Código generado para carnet (preescolar/primaria) */
+    childNumber: { type: Number, default: null },
     studentCardNumber: { type: String, trim: true, default: '' },
+    healthInfo: { type: healthInfoSchema, default: () => ({}) },
     active: { type: Boolean, default: true },
   },
   { timestamps: true }

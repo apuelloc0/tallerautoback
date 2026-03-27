@@ -6,10 +6,18 @@ export const DEFAULT_GENERAL = {
   rif: 'J-12345678-9',
   direccion: 'Av. Principal, Sector Centro',
   ciudad: 'Caracas',
+  estado: '',
+  municipio: '',
+  codigoInstitucion: '',
   telefono: '0212-1234567',
   email: 'contacto@institucion.edu.ve',
   idioma: 'es',
   logoUrl: '',
+  directorTitle: '',
+  directorName: '',
+  directorIdNationality: 'V',
+  directorIdNumber: '',
+  directorRole: 'DIRECTOR(A)',
 };
 
 function buildGeneralPayload(body = {}) {
@@ -20,8 +28,16 @@ function buildGeneralPayload(body = {}) {
     email: String(body.email ?? '').trim(),
     direccion: String(body.direccion ?? '').trim(),
     ciudad: String(body.ciudad ?? DEFAULT_GENERAL.ciudad).trim(),
+    estado: String(body.estado ?? '').trim(),
+    municipio: String(body.municipio ?? '').trim(),
+    codigoInstitucion: String(body.codigoInstitucion ?? '').trim(),
     idioma: String(body.idioma ?? DEFAULT_GENERAL.idioma).trim(),
     logoUrl: String(body.logoUrl ?? '').trim(),
+    directorTitle: String(body.directorTitle ?? '').trim(),
+    directorName: String(body.directorName ?? '').trim(),
+    directorIdNationality: String(body.directorIdNationality ?? 'V').trim(),
+    directorIdNumber: String(body.directorIdNumber ?? '').trim(),
+    directorRole: String(body.directorRole ?? 'DIRECTOR(A)').trim(),
   };
 }
 

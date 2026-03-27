@@ -73,6 +73,110 @@ class BaseReport {
   }
 }
 
+// ── PDF helpers ─────────────────────────────────────────────────────────────
+
+/**
+ * Write a paragraph with mixed bold/regular segments on one line, matching <p> in the preview.
+ * segments: Array of [text, isBold]
+ */
+function writeMixedLine(doc, left, usableW, segments) {
+  const last = segments.length - 1;
+  segments.forEach(([text, bold], i) => {
+    doc.font(bold ? 'Helvetica-Bold' : 'Helvetica')
+      .fontSize(11)
+      .fillColor('#000000');
+    if (i === 0) {
+      doc.text(String(text), left, doc.y, { continued: i < last, width: usableW });
+    } else {
+      doc.text(String(text), { continued: i < last, width: usableW });
+    }
+  });
+}
+
+/**
+ * Draw a table matching the on-screen preview CSS exactly:
+ *   th: background #f8f9fa, bold, borderBottom 2px #ddd
+ *   td: regular weight, borderBottom 1px #eee
+ */
+function drawPdfTable(doc, { headers, rows, colWidths, left, fontSize = 10 }) {
+  const HEADER_H = 24;
+  const ROW_H = 20;
+  const HEADER_BG = '#f8f9fa';
+  const HEADER_FG = '#000000';
+  const ROW_BG = '#ffffff';
+  const HEADER_BORDER = '#dddddd';
+  const ROW_BORDER = '#eeeeee';
+  const totalW = colWidths.reduce((a, b) => a + b, 0);
+  const pageH = doc.page.height - doc.page.margins.bottom;
+
+  const drawHeader = (y) => {
+    doc.save().rect(left, y, totalW, HEADER_H).fill(HEADER_BG).restore();
+    let x = left;
+    headers.forEach((h, ci) => {
+      doc.font('Helvetica-Bold').fontSize(fontSize).fillColor(HEADER_FG)
+        .text(String(h), x + 8, y + (HEADER_H - fontSize) / 2, {
+          width: colWidths[ci] - 10,
+          lineBreak: false,
+          ellipsis: true,
+        });
+      x += colWidths[ci];
+    });
+    // 2px bottom border matching `borderBottom: '2px solid #ddd'`
+    doc.moveTo(left, y + HEADER_H).lineTo(left + totalW, y + HEADER_H)
+      .strokeColor(HEADER_BORDER).lineWidth(2).stroke();
+    doc.lineWidth(0.5);
+  };
+
+  drawHeader(doc.y);
+  doc.y += HEADER_H;
+
+  rows.forEach((row) => {
+    if (doc.y + ROW_H > pageH) {
+      doc.addPage();
+      drawHeader(doc.y);
+      doc.y += HEADER_H;
+    }
+    const y = doc.y;
+    doc.save().rect(left, y, totalW, ROW_H).fill(ROW_BG).restore();
+    let x = left;
+    row.forEach((cell, ci) => {
+      doc.font('Helvetica').fontSize(fontSize).fillColor('#000000')
+        .text(String(cell ?? '—'), x + 8, y + (ROW_H - fontSize) / 2, {
+          width: colWidths[ci] - 10,
+          lineBreak: false,
+          ellipsis: true,
+        });
+      x += colWidths[ci];
+    });
+    doc.moveTo(left, y + ROW_H).lineTo(left + totalW, y + ROW_H)
+      .strokeColor(ROW_BORDER).lineWidth(1).stroke();
+    doc.fillColor('#000000');
+    doc.y += ROW_H;
+  });
+
+  doc.moveDown(0.5);
+}
+
+// ── Filter helpers ───────────────────────────────────────────────────────────
+
+function buildStudentFilter(query = {}) {
+  const { schoolLevel, grade, section } = query;
+  const match = { active: true };
+  if (schoolLevel) match.schoolLevel = schoolLevel;
+  if (grade) match.grade = grade;
+  if (section) match.section = section;
+  return match;
+}
+
+function buildFilterLabel(query = {}) {
+  const { schoolLevel, grade, section } = query;
+  const parts = [];
+  if (schoolLevel) parts.push(schoolLevel);
+  if (grade) parts.push(`Grado: ${grade}`);
+  if (section) parts.push(`Sección: ${section}`);
+  return parts.length ? parts.join(' · ') : null;
+}
+
 class InstitutionalReport extends BaseReport {
   getPdfFilenamePrefix() {
     return 'reporte-institucional';
@@ -84,18 +188,20 @@ class InstitutionalReport extends BaseReport {
 
   getReportSubtitle(data) {
     const st = data.students || {};
-    return `Resumen general — ${st.total ?? 0} estudiantes activos`;
+    const label = data.filterLabel ? ` — ${data.filterLabel}` : '';
+    return `Resumen general — ${st.total ?? 0} estudiantes activos${label}`;
   }
 
-  async getData() {
+  async getData(req) {
+    const match = buildStudentFilter(req.query);
     const [studentCount, paymentCount, paymentTotal, cutOffCount] = await Promise.all([
-      Student.countDocuments({ active: true }),
+      Student.countDocuments(match),
       Payment.countDocuments(),
       Payment.aggregate([{ $group: { _id: null, bs: { $sum: '$amountBs' }, usd: { $sum: '$amountUsd' } } }]),
       CutOffDate.countDocuments({ activo: true }),
     ]);
     const byYearSection = await Student.aggregate([
-      { $match: { active: true } },
+      { $match: match },
       { $group: { _id: { grado: '$grade', seccion: '$section' }, count: { $sum: 1 } } },
       { $sort: { '_id.grado': 1, '_id.seccion': 1 } },
     ]);
@@ -104,36 +210,48 @@ class InstitutionalReport extends BaseReport {
       students: { total: studentCount, byYearSection },
       payments: { total: paymentCount, totalBs: totals.bs, totalUsd: totals.usd },
       cutOffDates: cutOffCount,
+      filterLabel: buildFilterLabel(req.query),
     };
   }
 
   writePdf(doc, data) {
     const st = data.students || {};
     const pay = data.payments || {};
-    doc.fontSize(11).font('Helvetica');
-    doc.text(`Estudiantes total: ${st.total}`, { continued: false });
-    doc.text(
-      `Pagos (registros): ${pay.total}  —  Total Bs: ${pay.totalBs ?? 0}  —  Total USD: ${pay.totalUsd ?? 0}`,
-      { continued: false }
-    );
-    doc.text(`Fechas de corte activas: ${data.cutOffDates ?? 0}`, { continued: false });
-    doc.moveDown(0.5);
-    doc.fontSize(10).text('Por grado y sección', { continued: false });
+    const left = doc.page.margins.left;
+    const usableW = doc.page.width - left - doc.page.margins.right;
+
+    // <p><strong>Estudiantes total:</strong> X</p>
+    writeMixedLine(doc, left, usableW, [['Estudiantes total: ', true], [st.total ?? 0, false]]);
     doc.moveDown(0.3);
-    let y = doc.y;
-    doc.font('Helvetica-Bold').fontSize(9);
-    doc.text('Grado', 50, y);
-    doc.text('Sección', 120, y);
-    doc.text('Cantidad', 200, y);
-    y += 14;
-    doc.moveTo(50, y).lineTo(250, y).stroke();
-    y += 6;
-    doc.font('Helvetica').fontSize(9);
-    (st.byYearSection || []).forEach((r) => {
-      doc.text(String(r._id?.grado ?? '—'), 50, y);
-      doc.text(String(r._id?.seccion ?? '—'), 120, y);
-      doc.text(String(r.count ?? 0), 200, y);
-      y += 12;
+
+    // <p><strong>Pagos (registros):</strong> X — <strong>Total Bs:</strong> X — <strong>Total USD:</strong> X</p>
+    writeMixedLine(doc, left, usableW, [
+      ['Pagos (registros): ', true], [pay.total ?? 0, false],
+      [' — ', false],
+      ['Total Bs: ', true], [pay.totalBs ?? 0, false],
+      [' — ', false],
+      ['Total USD: ', true], [pay.totalUsd ?? 0, false],
+    ]);
+    doc.moveDown(0.3);
+
+    // <p><strong>Fechas de corte activas:</strong> X</p>
+    writeMixedLine(doc, left, usableW, [['Fechas de corte activas: ', true], [data.cutOffDates ?? 0, false]]);
+    doc.moveDown(0.6);
+
+    // <h4>Por grado y seccion</h4>
+    doc.font('Helvetica-Bold').fontSize(12).fillColor('#000000').text('Por grado y seccion', left, doc.y);
+    doc.moveDown(0.35);
+
+    const rows = (st.byYearSection || []).map((r) => [
+      r._id?.grado ?? '—',
+      r._id?.seccion ?? '—',
+      r.count ?? 0,
+    ]);
+    drawPdfTable(doc, {
+      headers: ['Grado', 'Seccion', 'Cantidad'],
+      rows,
+      colWidths: [200, 200, 95],
+      left,
     });
   }
 }
@@ -148,13 +266,15 @@ class OccupancyReport extends BaseReport {
   }
 
   getReportSubtitle(data) {
-    return `Total estudiantes: ${data.totalEstudiantes ?? 0} — Ocupación: ${data.ocupacionPorcentaje ?? 0}%`;
+    const label = data.filterLabel ? ` — ${data.filterLabel}` : '';
+    return `Total estudiantes: ${data.totalEstudiantes ?? 0} — Ocupación: ${data.ocupacionPorcentaje ?? 0}%${label}`;
   }
 
-  async getData() {
+  async getData(req) {
+    const match = buildStudentFilter(req.query);
     const academicConfig = await AcademicConfig.findOne().lean();
     const capacity = Number(academicConfig?.capacidadMaxima) || 0;
-    const totalStudents = await Student.countDocuments({ active: { $ne: false } });
+    const totalStudents = await Student.countDocuments(match);
     const cuposDisponibles = Math.max(0, capacity - totalStudents);
     const ocupacionPorcentaje = capacity > 0 ? Math.round((totalStudents / capacity) * 100) : 0;
     return {
@@ -162,15 +282,24 @@ class OccupancyReport extends BaseReport {
       totalEstudiantes: totalStudents,
       cuposDisponibles,
       ocupacionPorcentaje,
+      filterLabel: buildFilterLabel(req.query),
     };
   }
 
   writePdf(doc, data) {
-    doc.fontSize(11).font('Helvetica');
-    doc.text(`Capacidad máxima: ${data.capacidadMaxima}`, { continued: false });
-    doc.text(`Total estudiantes: ${data.totalEstudiantes}`, { continued: false });
-    doc.text(`Cupos disponibles: ${data.cuposDisponibles}`, { continued: false });
-    doc.text(`Ocupación: ${data.ocupacionPorcentaje}%`, { continued: false });
+    const left = doc.page.margins.left;
+    const usableW = doc.page.width - left - doc.page.margins.right;
+
+    // Mirrors exactly the 4 <p> lines shown in the preview
+    [
+      ['Capacidad maxima: ', String(data.capacidadMaxima ?? 0)],
+      ['Total estudiantes: ', String(data.totalEstudiantes ?? 0)],
+      ['Cupos disponibles: ', String(data.cuposDisponibles ?? 0)],
+      ['Ocupacion: ', `${data.ocupacionPorcentaje ?? 0}%`],
+    ].forEach(([label, value]) => {
+      writeMixedLine(doc, left, usableW, [[label, true], [value, false]]);
+      doc.moveDown(0.3);
+    });
   }
 }
 
@@ -184,12 +313,14 @@ class EnrollmentByGradeSectionReport extends BaseReport {
   }
 
   getReportSubtitle(data) {
-    return `Total: ${data.total ?? 0} estudiantes`;
+    const label = data.filterLabel ? ` — ${data.filterLabel}` : '';
+    return `Total: ${data.total ?? 0} estudiantes${label}`;
   }
 
-  async getData() {
+  async getData(req) {
+    const match = buildStudentFilter(req.query);
     const agg = await Student.aggregate([
-      { $match: { active: { $ne: false } } },
+      { $match: match },
       { $group: { _id: { grado: '$grade', seccion: '$section' }, count: { $sum: 1 } } },
       { $sort: { '_id.grado': 1, '_id.seccion': 1 } },
     ]);
@@ -199,24 +330,23 @@ class EnrollmentByGradeSectionReport extends BaseReport {
       cantidad: a.count,
     }));
     const total = rows.reduce((s, x) => s + x.cantidad, 0);
-    return { rows, total };
+    return { rows, total, filterLabel: buildFilterLabel(req.query) };
   }
 
   writePdf(doc, data) {
-    let y = doc.y;
-    doc.font('Helvetica-Bold').fontSize(10);
-    doc.text('Grado', 50, y);
-    doc.text('Sección', 120, y);
-    doc.text('Cantidad', 200, y);
-    y += 14;
-    doc.moveTo(50, y).lineTo(250, y).stroke();
-    y += 6;
-    doc.font('Helvetica').fontSize(10);
-    (data.rows || []).forEach((r) => {
-      doc.text(String(r.grado), 50, y);
-      doc.text(String(r.seccion), 120, y);
-      doc.text(String(r.cantidad), 200, y);
-      y += 12;
+    const left = doc.page.margins.left;
+    const usableW = doc.page.width - left - doc.page.margins.right;
+
+    // <p><strong>Total:</strong> X</p>
+    writeMixedLine(doc, left, usableW, [['Total: ', true], [data.total ?? 0, false]]);
+    doc.moveDown(0.5);
+
+    const rows = (data.rows || []).map((r) => [r.grado, r.seccion, r.cantidad]);
+    drawPdfTable(doc, {
+      headers: ['Grado', 'Seccion', 'Cantidad'],
+      rows,
+      colWidths: [200, 200, 95],
+      left,
     });
   }
 }
@@ -235,10 +365,6 @@ class UsersRolesReport extends BaseReport {
     return `${n} usuario(s) registrado(s)`;
   }
 
-  getPdfOptions() {
-    return { margin: 50, size: 'A4', layout: 'landscape' };
-  }
-
   async getData() {
     const users = await User.find({})
       .select('username fullName role active')
@@ -253,28 +379,114 @@ class UsersRolesReport extends BaseReport {
   }
 
   writePdf(doc, data) {
-    const w = [120, 180, 100, 60];
-    let y = doc.y;
-    doc.font('Helvetica-Bold').fontSize(9);
-    doc.text('Usuario', 50, y, { width: w[0] });
-    doc.text('Nombre completo', 170, y, { width: w[1] });
-    doc.text('Rol', 350, y, { width: w[2] });
-    doc.text('Activo', 450, y, { width: w[3] });
-    y += 14;
-    doc.moveTo(50, y).lineTo(doc.page.width - 50, y).stroke();
-    y += 6;
-    doc.font('Helvetica').fontSize(9);
-    data.forEach((r) => {
-      if (y > doc.page.height - 55) {
-        doc.addPage({ size: 'A4', layout: 'landscape', margin: 50 });
-        y = 50;
-      }
-      doc.text(String(r.usuario ?? '—').slice(0, 25), 50, y, { width: w[0] });
-      doc.text(String(r.nombreCompleto ?? '—').slice(0, 35), 170, y, { width: w[1] });
-      doc.text(String(r.rol ?? '—'), 350, y, { width: w[2] });
-      doc.text(r.activo ? 'Sí' : 'No', 450, y, { width: w[3] });
-      y += 12;
+    const left = doc.page.margins.left;
+
+    const rows = data.map((r) => [
+      r.usuario ?? '—',
+      r.nombreCompleto ?? '—',
+      r.rol ?? '—',
+      r.activo ? 'Si' : 'No',
+    ]);
+
+    drawPdfTable(doc, {
+      headers: ['Usuario', 'Nombre completo', 'Rol', 'Activo'],
+      rows,
+      colWidths: [110, 210, 130, 45],
+      left,
     });
+  }
+}
+
+class StudentsListByGradeSectionReport extends BaseReport {
+  getPdfFilenamePrefix() {
+    return 'listado-grado-seccion';
+  }
+
+  getReportTitle() {
+    return 'Listado de estudiantes por grado y sección';
+  }
+
+  getReportSubtitle(data) {
+    return `Total: ${data.total ?? 0} estudiantes${data.filterLabel ? ` — ${data.filterLabel}` : ''}`;
+  }
+
+  getPdfOptions() {
+    return { margin: 40, size: 'A4' };
+  }
+
+  async getData(req) {
+    const { schoolLevel, grade, section } = req.query;
+    const match = { active: { $ne: false } };
+    if (schoolLevel) match.schoolLevel = schoolLevel;
+    if (grade) match.grade = grade;
+    if (section) match.section = section;
+
+    const students = await Student.find(match)
+      .sort({ schoolLevel: 1, grade: 1, section: 1, lastName: 1, firstName: 1 })
+      .select('firstName lastName idNumber idNationality schoolLevel grade section enrollmentDate studentCardNumber')
+      .lean();
+
+    const filterParts = [];
+    if (schoolLevel) filterParts.push(schoolLevel);
+    if (grade) filterParts.push(`Grado: ${grade}`);
+    if (section) filterParts.push(`Sección: ${section}`);
+
+    const groups = {};
+    for (const s of students) {
+      const key = `${s.schoolLevel || '—'}|||${s.grade || '—'}|||${s.section || '—'}`;
+      if (!groups[key]) groups[key] = { schoolLevel: s.schoolLevel || '—', grade: s.grade || '—', section: s.section || '—', students: [] };
+      groups[key].students.push(s);
+    }
+
+    return {
+      groups: Object.values(groups),
+      total: students.length,
+      filterLabel: filterParts.length ? filterParts.join(' · ') : null,
+    };
+  }
+
+  writePdf(doc, data) {
+    const left = doc.page.margins.left;
+    const usableW = doc.page.width - left - doc.page.margins.right;
+
+    // <p><strong>Total:</strong> X estudiante(s)</p>
+    writeMixedLine(doc, left, usableW, [['Total: ', true], [`${data.total ?? 0} estudiante(s)`, false]]);
+    doc.moveDown(0.5);
+
+    for (const group of data.groups || []) {
+      if (doc.y > doc.page.height - 140) doc.addPage();
+
+      // <h4 style={{ color: '#0952C8' }}>LEVEL — Grado X — Sección Y (N estudiante(s))</h4>
+      doc.font('Helvetica-Bold').fontSize(12).fillColor('#0952C8')
+        .text(
+          `${group.schoolLevel} — Grado ${group.grade} — Sección ${group.section}`,
+          left, doc.y, { continued: true, width: usableW }
+        );
+      doc.font('Helvetica').fontSize(12).fillColor('#555555')
+        .text(`  (${group.students.length} estudiante(s))`, { continued: false });
+
+      // underline matching `borderBottom: '2px solid #0952C8'`
+      doc.moveTo(left, doc.y).lineTo(left + usableW, doc.y)
+        .strokeColor('#0952C8').lineWidth(2).stroke();
+      doc.lineWidth(0.5);
+      doc.moveDown(0.4);
+      doc.fillColor('#000000');
+
+      const rows = group.students.map((s, idx) => [
+        idx + 1,
+        [s.lastName, s.firstName].filter(Boolean).join(', '),
+        s.idNumber ? `${s.idNationality || 'V'}-${s.idNumber}` : '—',
+        s.enrollmentDate ? new Date(s.enrollmentDate).toLocaleDateString('es') : '—',
+        s.studentCardNumber || '—',
+      ]);
+
+      drawPdfTable(doc, {
+        headers: ['N°', 'Apellidos, Nombres', 'Cédula', 'F. Inscripción', 'Cód. estudiantil'],
+        rows,
+        colWidths: [28, 222, 90, 90, 65],
+        left,
+      });
+    }
   }
 }
 
@@ -282,6 +494,7 @@ const institutionalReport = new InstitutionalReport();
 const occupancyReport = new OccupancyReport();
 const enrollmentReport = new EnrollmentByGradeSectionReport();
 const usersRolesReport = new UsersRolesReport();
+const studentsListByGradeSectionReport = new StudentsListByGradeSectionReport();
 
 export const institutional = (req, res, next) => institutionalReport.handle(req, res, next);
 
@@ -290,3 +503,5 @@ export const occupancy = (req, res, next) => occupancyReport.handle(req, res, ne
 export const enrollmentByGradeSection = (req, res, next) => enrollmentReport.handle(req, res, next);
 
 export const usersRoles = (req, res, next) => usersRolesReport.handle(req, res, next);
+
+export const studentsListByGradeSection = (req, res, next) => studentsListByGradeSectionReport.handle(req, res, next);
