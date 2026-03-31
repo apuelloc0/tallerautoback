@@ -41,6 +41,22 @@ function buildGeneralPayload(body = {}) {
   };
 }
 
+export const getPublicInfo = async (req, res, next) => {
+  try {
+    const doc = await AcademicConfig.findOne().lean();
+    const general = doc?.general ?? {};
+    res.json({
+      ok: true,
+      data: {
+        nombreInstitucion: general.nombreInstitucion || DEFAULT_GENERAL.nombreInstitucion,
+        rif: general.rif || DEFAULT_GENERAL.rif,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const getConfig = async (req, res, next) => {
   try {
     const doc = await AcademicConfig.findOne().lean();

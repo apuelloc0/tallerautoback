@@ -5,6 +5,8 @@ import { uploadSingle } from '../config/upload.js';
 
 const router = Router();
 
+router.get('/public', general.getPublicInfo);
+
 router.use(authenticate);
 
 router.get('/', general.getConfig);
