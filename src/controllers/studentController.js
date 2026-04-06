@@ -11,7 +11,7 @@ import fs from 'fs';
 export const list = async (req, res, next) => {
   try {
     const { year, section, grade, schoolLevel, enrollmentType, search } = req.query;
-    const filter = { active: true };
+    const filter = { active: { $ne: false } };
     if (year) filter.grade = String(year);
     if (section) filter.section = section;
     if (grade) filter.grade = grade;
@@ -222,6 +222,24 @@ export const update = async (req, res, next) => {
       return res.status(404).json({ ok: false, message: 'Estudiante no encontrado.' });
     }
     const data = pickBody(req.body);
+    const onlyActive =
+      Object.keys(data).length === 1 && Object.prototype.hasOwnProperty.call(data, 'active');
+    if (onlyActive) {
+      const student = await Student.findByIdAndUpdate(
+        req.params.id,
+        { $set: { active: data.active } },
+        { new: true, runValidators: true }
+      );
+      if (!student) {
+        return res.status(404).json({ ok: false, message: 'Estudiante no encontrado.' });
+      }
+      return res.json({
+        ok: true,
+        data: student,
+        message: data.active === false ? 'Estudiante desactivado.' : 'Estudiante reactivado.',
+        warnings: [],
+      });
+    }
     if (data.birthDate && typeof data.birthDate === 'string') {
       data.birthDate = new Date(data.birthDate);
     }
@@ -329,7 +347,7 @@ export const uploadFotoRepresentante = async (req, res, next) => {
 export const quotaStatus = async (req, res, next) => {
   try {
     const perSection = await Student.aggregate([
-      { $match: { active: true } },
+      { $match: { active: { $ne: false } } },
       { $group: { _id: { year: '$grade', section: '$section' }, count: { $sum: 1 } } },
     ]);
     const maxPerSection = INSCRIPTION.MAX_STUDENTS_PER_SECTION;

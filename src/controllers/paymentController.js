@@ -353,7 +353,7 @@ export const solvencies = async (req, res, next) => {
       if (!paidByStudentCut[k]) paidByStudentCut[k] = 0;
       paidByStudentCut[k] += a.amountUsd || 0;
     });
-    const students = await Student.find({ active: true }).lean();
+    const students = await Student.find({ active: { $ne: false } }).lean();
     const debtors = [];
     for (const s of students) {
       if (s.paymentConfig?.exemption?.type === 'permanente') continue;

@@ -161,7 +161,7 @@ function drawPdfTable(doc, { headers, rows, colWidths, left, fontSize = 10 }) {
 
 function buildStudentFilter(query = {}) {
   const { schoolLevel, grade, section } = query;
-  const match = { active: true };
+  const match = { active: { $ne: false } };
   if (schoolLevel) match.schoolLevel = schoolLevel;
   if (grade) match.grade = grade;
   if (section) match.section = section;
