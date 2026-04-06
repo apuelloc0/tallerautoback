@@ -22,6 +22,13 @@ router.get(
   student.studentCardPdf
 );
 router.get(
+  '/:id/enrollment-certificate/preview',
+  requirePermission('ESTUDIANTES_LISTA'),
+  param('id').isMongoId(),
+  validate,
+  student.enrollmentCertificatePreview
+);
+router.get(
   '/:id/enrollment-certificate/pdf',
   requirePermission('ESTUDIANTES_LISTA'),
   param('id').isMongoId(),

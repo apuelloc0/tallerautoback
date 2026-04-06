@@ -383,6 +383,90 @@ function formatStudentIdDisplay(s) {
   return num ? `${nat}-${num}` : '—';
 }
 
+const LEVEL_TEXT_CONSTANCIA = {
+  PREESCOLAR: 'EDUCACIÓN INICIAL',
+  PRIMARIA: 'EDUCACIÓN PRIMARIA',
+  LICEO: 'EDUCACIÓN MEDIA GENERAL',
+};
+
+/** Textos alineados con el PDF de constancia (JSON para “ver en pantalla” y generación PDF). */
+function buildEnrollmentCertificateViewModel(student, institution) {
+  const studentName = [student.firstName, student.lastName].filter(Boolean).join(' ');
+  const studentCI = formatStudentIdDisplay(student);
+  const ciText = student.idNumber ? studentCI : 'S/C';
+  const levelText = LEVEL_TEXT_CONSTANCIA[student.schoolLevel] || (student.schoolLevel || 'EDUCACIÓN');
+  const gradeText = student.grade || '___';
+  const dirFullId = institution.directorIdNumber
+    ? `${institution.directorIdNationality || 'V'}- ${institution.directorIdNumber}`
+    : '___';
+  const dirFullName = [institution.directorTitle, institution.directorName].filter(Boolean).join(' ') || '___';
+  const instName = institution.nombreInstitucion || '___';
+  const ciudad = institution.ciudad || '___';
+  const estado = institution.estado || '';
+  const municipio = institution.municipio || '';
+
+  let periodoEscolar = institution.activeSchoolYear || '';
+  if (!periodoEscolar && student.enrollmentDate) {
+    const yr = new Date(student.enrollmentDate).getFullYear();
+    periodoEscolar = `${yr}-${yr + 1}`;
+  }
+  if (!periodoEscolar) {
+    const yr = new Date().getFullYear();
+    periodoEscolar = `${yr}-${yr + 1}`;
+  }
+
+  let ubicacion = `que funciona en ${ciudad}`;
+  if (municipio) ubicacion += `, ${municipio}`;
+  if (estado) ubicacion += `, del Estado ${estado}`;
+
+  const directorRole = institution.directorRole || 'Director(a)';
+  const directorLine = [institution.directorTitle, institution.directorName].filter(Boolean).join(' ');
+
+  return {
+    studentName,
+    ciText,
+    levelText,
+    gradeText,
+    dirFullId,
+    dirFullName,
+    instName,
+    ciudad,
+    estado,
+    municipio,
+    periodoEscolar,
+    ubicacion,
+    directorRole,
+    directorLine,
+    instDireccion: institution.direccion || '',
+    instTelefono: institution.telefono || '',
+    instRif: institution.rif || '',
+  };
+}
+
+/** GET JSON — misma información que la constancia en PDF (vista HTML en cliente). */
+export const enrollmentCertificatePreview = async (req, res, next) => {
+  try {
+    const student = await Student.findById(req.params.id).lean();
+    if (!student) return res.status(404).json({ ok: false, message: 'Estudiante no encontrado.' });
+    const institution = await loadInstitutionGeneral();
+    const data = buildEnrollmentCertificateViewModel(student, institution);
+    const header = {
+      generatedAt: new Date().toISOString(),
+      institution: {
+        nombreInstitucion: institution.nombreInstitucion,
+        rif: institution.rif,
+        ciudad: institution.ciudad,
+        telefono: institution.telefono,
+      },
+      reportTitle: 'Constancia de inscripción',
+      reportSubtitle: data.studentName,
+    };
+    res.json({ ok: true, header, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const reportPdf = async (req, res, next) => {
   try {
     const { grade, section, schoolLevel } = req.query;
@@ -565,6 +649,7 @@ export const enrollmentCertificatePdf = async (req, res, next) => {
     const student = await Student.findById(req.params.id).lean();
     if (!student) return res.status(404).json({ ok: false, message: 'Estudiante no encontrado.' });
     const institution = await loadInstitutionGeneral();
+    const vm = buildEnrollmentCertificateViewModel(student, institution);
 
     const filename = `constancia-inscripcion-${student._id}-${new Date().toISOString().slice(0, 10)}.pdf`;
     res.setHeader('Content-Type', 'application/pdf');
@@ -593,39 +678,6 @@ export const enrollmentCertificatePdf = async (req, res, next) => {
       });
     doc.moveDown(1.8);
 
-    // ── Datos auxiliares ─────────────────────────────────────────────────
-    const studentName = [student.firstName, student.lastName].filter(Boolean).join(' ');
-    const studentCI = formatStudentIdDisplay(student);
-    const ciText = student.idNumber ? studentCI : 'S/C';
-
-    const LEVEL_TEXT = {
-      PREESCOLAR: 'EDUCACIÓN INICIAL',
-      PRIMARIA: 'EDUCACIÓN PRIMARIA',
-      LICEO: 'EDUCACIÓN MEDIA GENERAL',
-    };
-    const levelText = LEVEL_TEXT[student.schoolLevel] || (student.schoolLevel || 'EDUCACIÓN');
-    const gradeText = student.grade || '___';
-
-    const dirFullId = institution.directorIdNumber
-      ? `${institution.directorIdNationality || 'V'}- ${institution.directorIdNumber}`
-      : '___';
-    const dirFullName = [institution.directorTitle, institution.directorName].filter(Boolean).join(' ') || '___';
-    const instName = institution.nombreInstitucion || '___';
-    const ciudad = institution.ciudad || '___';
-    const estado = institution.estado || '';
-    const municipio = institution.municipio || '';
-
-    // Período escolar: usar año activo o derivar del año de inscripción
-    let periodoEscolar = institution.activeSchoolYear || '';
-    if (!periodoEscolar && student.enrollmentDate) {
-      const yr = new Date(student.enrollmentDate).getFullYear();
-      periodoEscolar = `${yr}-${yr + 1}`;
-    }
-    if (!periodoEscolar) {
-      const yr = new Date().getFullYear();
-      periodoEscolar = `${yr}-${yr + 1}`;
-    }
-
     // ── Párrafo principal (texto justificado con bold inline) ─────────────
     const paraOpts = { align: 'justify', width: usableW, lineGap: 3 };
     const bold = (txt, extra = {}) =>
@@ -636,37 +688,33 @@ export const enrollmentCertificatePdf = async (req, res, next) => {
     doc.font('Helvetica').fontSize(fontSize).fillColor('#000000');
 
     reg('Quien Suscribe, ');
-    bold(dirFullName);
+    bold(vm.dirFullName);
     reg(' Titular de la Cedula de Identidad Nº ');
-    bold(dirFullId);
-    reg(` ${institution.directorRole || 'Director(a)'} de la `);
-    bold(`"${instName}"`);
+    bold(vm.dirFullId);
+    reg(` ${vm.directorRole} de la `);
+    bold(`"${vm.instName}"`);
 
-    // Construir la parte de ubicación
-    let ubicacion = `que funciona en ${ciudad}`;
-    if (municipio) ubicacion += `, ${municipio}`;
-    if (estado) ubicacion += `, del Estado ${estado}`;
-    reg(`, ${ubicacion}, hace constar por medio de la presente que (la) o el Estudiante: `);
+    reg(`, ${vm.ubicacion}, hace constar por medio de la presente que (la) o el Estudiante: `);
 
     // Nombre del estudiante subrayado
-    doc.font('Helvetica-Bold').fontSize(fontSize).text(studentName, {
+    doc.font('Helvetica-Bold').fontSize(fontSize).text(vm.studentName, {
       continued: true,
       underline: true,
       ...paraOpts,
     });
 
     reg(', Cedula de Identidad ');
-    bold(ciText);
+    bold(vm.ciText);
     reg(' está inscrito(a) en este plantel para cursar: ');
-    bold(gradeText);
+    bold(vm.gradeText);
     reg(' de ');
-    doc.font('Helvetica-Bold').fontSize(fontSize).text(levelText, {
+    doc.font('Helvetica-Bold').fontSize(fontSize).text(vm.levelText, {
       continued: true,
       underline: true,
       ...paraOpts,
     });
     // Último segmento — sin continued para cerrar el párrafo
-    doc.font('Helvetica').fontSize(fontSize).text(`, para el Período Escolar: ${periodoEscolar}.`, {
+    doc.font('Helvetica').fontSize(fontSize).text(`, para el Período Escolar: ${vm.periodoEscolar}.`, {
       ...paraOpts,
       continued: false,
     });
@@ -679,7 +727,7 @@ export const enrollmentCertificatePdf = async (req, res, next) => {
       left, doc.y,
       { continued: true, align: 'left', width: usableW }
     );
-    doc.font('Helvetica-Bold').fontSize(fontSize).text(`${ciudad} `, { continued: true });
+    doc.font('Helvetica-Bold').fontSize(fontSize).text(`${vm.ciudad} `, { continued: true });
     doc.font('Helvetica').fontSize(fontSize).text(
       `a los ______ días del mes de ______________ de ________.`,
       { continued: false }
@@ -697,15 +745,9 @@ export const enrollmentCertificatePdf = async (req, res, next) => {
 
     const sigTextOpts = { align: 'center', width: usableW };
     if (institution.directorName) {
-      doc.font('Helvetica-Bold').fontSize(10).text(
-        [institution.directorTitle, institution.directorName].filter(Boolean).join(' '),
-        left, doc.y, sigTextOpts
-      );
+      doc.font('Helvetica-Bold').fontSize(10).text(vm.directorLine, left, doc.y, sigTextOpts);
     }
-    doc.font('Helvetica-Bold').fontSize(10).text(
-      institution.directorRole || 'DIRECTOR(A)',
-      left, doc.y, sigTextOpts
-    );
+    doc.font('Helvetica-Bold').fontSize(10).text(institution.directorRole || 'DIRECTOR(A)', left, doc.y, sigTextOpts);
     doc.font('Helvetica').fontSize(9).fillColor('#333333');
     if (institution.direccion) doc.text(institution.direccion.toUpperCase(), left, doc.y, sigTextOpts);
     if (institution.telefono) doc.text(`TELÉFONO: ${institution.telefono}`, left, doc.y, sigTextOpts);
