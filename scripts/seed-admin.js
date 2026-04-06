@@ -17,8 +17,8 @@ const seed = async () => {
     process.exit(0);
   }
   await User.create({
-    username: 'admin',
-    password: 'admin123',
+    username: 'directivo',
+    password: 'directivo123',
     fullName: 'Administradora',
     role: ROLES.DIRECTORA,
     securityQuestions: [
