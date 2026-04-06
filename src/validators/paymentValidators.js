@@ -3,14 +3,14 @@ import { body, param } from 'express-validator';
 /** Crear transacción + allocations */
 export const paymentValidator = [
   body('paymentType').optional().isIn(['usd', 'ves']).withMessage('Tipo de pago inválido'),
-  body('paymentMethod').optional().trim(),
+  body('paymentMethod').optional().trim().isLength({ max: 80 }).withMessage('Forma de pago demasiado larga'),
   body('amount').optional().isFloat({ min: 0 }).withMessage('Monto debe ser un número positivo'),
   body('amountUsd').optional().isFloat({ min: 0 }),
   body('amountBs').optional().isFloat({ min: 0 }),
   body('paidAt').optional().isISO8601().withMessage('Fecha de pago inválida'),
-  body('description').optional().trim(),
+  body('description').optional().trim().isLength({ max: 2000 }).withMessage('Descripción demasiado larga'),
   body('receipt').optional().isMongoId(),
-  body('referenceNumber').optional().trim(),
+  body('referenceNumber').optional().trim().isLength({ max: 120 }).withMessage('Referencia demasiado larga'),
   body('supportImageUrl').optional().trim(),
   body('allocations').isArray().withMessage('allocations debe ser un array'),
   body('allocations.*.student').isMongoId().withMessage('Estudiante requerido en cada línea'),
@@ -52,7 +52,7 @@ export const updatePaymentValidator = [
   body('amountUsd').optional().isFloat({ min: 0 }),
   body('amountBs').optional().isFloat({ min: 0 }),
   body('paidAt').optional().isISO8601(),
-  body('description').optional().trim(),
-  body('referenceNumber').optional().trim(),
+  body('description').optional().trim().isLength({ max: 2000 }),
+  body('referenceNumber').optional().trim().isLength({ max: 120 }),
   body('supportImageUrl').optional().trim(),
 ];

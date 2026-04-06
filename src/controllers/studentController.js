@@ -381,7 +381,7 @@ export const reportPdf = async (req, res, next) => {
     const subtitleParts = [];
     if (schoolLevel) subtitleParts.push(`Nivel: ${schoolLevel}`);
     if (grade) subtitleParts.push(`Grado/Ano: ${grade}`);
-    if (section) subtitleParts.push(`Seccion: ${section}`);
+    if (section) subtitleParts.push(`Sección: ${section}`);
     subtitleParts.push(`Total: ${students.length} estudiantes`);
 
     const filename = `reporte-estudiantes-${new Date().toISOString().slice(0, 10)}.pdf`;
@@ -398,7 +398,7 @@ export const reportPdf = async (req, res, next) => {
     });
 
     const colWidths = [72, 118, 52, 28, 28, 88, 82, 72];
-    const headers = ['Cedula', 'Nombre completo', 'Nivel', 'Grado', 'Secc.', 'Email', 'Telefono', 'F. inscripcion'];
+    const headers = ['Cédula', 'Nombre completo', 'Nivel', 'Grado', 'Secc.', 'Email', 'Teléfono', 'F. inscripción'];
     let y = doc.y;
 
     doc.fontSize(8).font('Helvetica-Bold');
@@ -520,7 +520,7 @@ export const studentCardPdf = async (req, res, next) => {
     ty += 14;
     doc.text(`Cedula: ${formatStudentIdDisplay(student)}`, textX, ty);
     ty += 14;
-    doc.text(`Nivel: ${student.schoolLevel || '—'}  |  Grado: ${student.grade || '—'}  |  Seccion: ${student.section || '—'}`, textX, ty);
+    doc.text(`Nivel: ${student.schoolLevel || '—'}  |  Grado: ${student.grade || '—'}  |  Sección: ${student.section || '—'}`, textX, ty);
     ty += 14;
     doc.font('Helvetica-Bold').text(`Codigo estudiantil: ${cardNumber || '—'}`, textX, ty);
     ty += 24;

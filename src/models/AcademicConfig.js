@@ -67,6 +67,8 @@ const generalConfigSchema = new mongoose.Schema(
     directorIdNationality: { type: String, trim: true, default: 'V' },
     directorIdNumber: { type: String, trim: true, default: '' },
     directorRole: { type: String, trim: true, default: 'DIRECTOR(A)' },
+    /** Tasa oficial USD → VES para pagos (persistida; uso sin internet) */
+    tasaUsdBs: { type: Number, min: 0, default: null },
   },
   { _id: false }
 );

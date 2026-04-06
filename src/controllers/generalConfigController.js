@@ -18,7 +18,15 @@ export const DEFAULT_GENERAL = {
   directorIdNationality: 'V',
   directorIdNumber: '',
   directorRole: 'DIRECTOR(A)',
+  tasaUsdBs: null,
 };
+
+function normalizeTasaUsdBs(v) {
+  if (v === '' || v === null || v === undefined) return null;
+  const n = typeof v === 'number' ? v : Number(String(v).replace(',', '.'));
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n;
+}
 
 function buildGeneralPayload(body = {}) {
   return {
@@ -38,6 +46,7 @@ function buildGeneralPayload(body = {}) {
     directorIdNationality: String(body.directorIdNationality ?? 'V').trim(),
     directorIdNumber: String(body.directorIdNumber ?? '').trim(),
     directorRole: String(body.directorRole ?? 'DIRECTOR(A)').trim(),
+    tasaUsdBs: normalizeTasaUsdBs(body.tasaUsdBs),
   };
 }
 
@@ -50,6 +59,8 @@ export const getPublicInfo = async (req, res, next) => {
       data: {
         nombreInstitucion: general.nombreInstitucion || DEFAULT_GENERAL.nombreInstitucion,
         rif: general.rif || DEFAULT_GENERAL.rif,
+        codigoInstitucion: general.codigoInstitucion || DEFAULT_GENERAL.codigoInstitucion,
+        tasaUsdBs: general.tasaUsdBs != null && general.tasaUsdBs > 0 ? general.tasaUsdBs : null,
       },
     });
   } catch (err) {

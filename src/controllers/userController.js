@@ -1,5 +1,6 @@
 import User from '../models/User.js';
 import jwt from 'jsonwebtoken';
+import { ROLES } from '../config/constants.js';
 
 export const list = async (req, res, next) => {
   try {
@@ -25,7 +26,11 @@ export const getOne = async (req, res, next) => {
 export const verifyUsername = async (req, res, next) => {
   try {
     const user = await User.findOne({ username: req.params.username });
-    res.json({ ok: true, userId: user._id, securityQuestions: user.securityQuestions });
+    if (!user) {
+      return res.status(404).json({ ok: false, message: 'Usuario no encontrado.' });
+    }
+    const securityQuestions = (user.securityQuestions || []).map((q) => ({ question: q.question }));
+    res.json({ ok: true, userId: user._id, securityQuestions });
   } catch (err) {
     next(err);
   }
@@ -102,6 +107,23 @@ export const update = async (req, res, next) => {
     if (!user) {
       return res.status(404).json({ ok: false, message: 'Usuario no encontrado.' });
     }
+    if (user.role === ROLES.DIRECTORA && user.active !== false) {
+      const directorsActive = await User.countDocuments({ role: ROLES.DIRECTORA, active: { $ne: false } });
+      if (directorsActive <= 1) {
+        if (req.body.role != null && req.body.role !== ROLES.DIRECTORA) {
+          return res.status(400).json({
+            ok: false,
+            message: 'Debe existir al menos una usuaria con rol Directora activa.',
+          });
+        }
+        if (req.body.active === false) {
+          return res.status(400).json({
+            ok: false,
+            message: 'No se puede desactivar la única Directora activa.',
+          });
+        }
+      }
+    }
     const allowed = ['username', 'fullName', 'role', 'active', 'securityQuestions'];
     if (req.body.password && req.body.password.length >= 6) {
       user.password = req.body.password;
@@ -121,10 +143,20 @@ export const update = async (req, res, next) => {
 
 export const remove = async (req, res, next) => {
   try {
-    const user = await User.findByIdAndDelete(req.params.id);
+    const user = await User.findById(req.params.id);
     if (!user) {
       return res.status(404).json({ ok: false, message: 'Usuario no encontrado.' });
     }
+    if (user.role === ROLES.DIRECTORA && user.active !== false) {
+      const directorsActive = await User.countDocuments({ role: ROLES.DIRECTORA, active: { $ne: false } });
+      if (directorsActive <= 1) {
+        return res.status(400).json({
+          ok: false,
+          message: 'No se puede eliminar la única Directora activa.',
+        });
+      }
+    }
+    await User.findByIdAndDelete(req.params.id);
     res.json({ ok: true, message: 'Usuario eliminado.' });
   } catch (err) {
     next(err);

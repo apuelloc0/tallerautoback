@@ -239,7 +239,7 @@ class InstitutionalReport extends BaseReport {
     doc.moveDown(0.6);
 
     // <h4>Por grado y seccion</h4>
-    doc.font('Helvetica-Bold').fontSize(12).fillColor('#000000').text('Por grado y seccion', left, doc.y);
+    doc.font('Helvetica-Bold').fontSize(12).fillColor('#000000').text('Por grado y sección', left, doc.y);
     doc.moveDown(0.35);
 
     const rows = (st.byYearSection || []).map((r) => [
@@ -292,10 +292,10 @@ class OccupancyReport extends BaseReport {
 
     // Mirrors exactly the 4 <p> lines shown in the preview
     [
-      ['Capacidad maxima: ', String(data.capacidadMaxima ?? 0)],
+      ['Capacidad máxima: ', String(data.capacidadMaxima ?? 0)],
       ['Total estudiantes: ', String(data.totalEstudiantes ?? 0)],
       ['Cupos disponibles: ', String(data.cuposDisponibles ?? 0)],
-      ['Ocupacion: ', `${data.ocupacionPorcentaje ?? 0}%`],
+      ['Ocupación: ', `${data.ocupacionPorcentaje ?? 0}%`],
     ].forEach(([label, value]) => {
       writeMixedLine(doc, left, usableW, [[label, true], [value, false]]);
       doc.moveDown(0.3);
@@ -474,17 +474,143 @@ class StudentsListByGradeSectionReport extends BaseReport {
 
       const rows = group.students.map((s, idx) => [
         idx + 1,
-        [s.lastName, s.firstName].filter(Boolean).join(', '),
-        s.idNumber ? `${s.idNationality || 'V'}-${s.idNumber}` : '—',
-        s.enrollmentDate ? new Date(s.enrollmentDate).toLocaleDateString('es') : '—',
         s.studentCardNumber || '—',
+        s.idNumber ? `${s.idNationality || 'V'}-${s.idNumber}` : '—',
+        [s.lastName, s.firstName].filter(Boolean).join(', '),
+        s.enrollmentDate ? new Date(s.enrollmentDate).toLocaleDateString('es') : '—',
       ]);
 
       drawPdfTable(doc, {
-        headers: ['N°', 'Apellidos, Nombres', 'Cédula', 'F. Inscripción', 'Cód. estudiantil'],
+        headers: ['N°', 'Cód. estud.', 'Cédula', 'Apellidos y nombres', 'F. inscripción'],
         rows,
-        colWidths: [28, 222, 90, 90, 65],
+        colWidths: [28, 72, 86, 208, 86],
         left,
+        fontSize: 9,
+      });
+    }
+  }
+}
+
+function computeAgeYears(birthDate, storedAge) {
+  if (birthDate) {
+    const d = new Date(birthDate);
+    if (!Number.isNaN(d.getTime())) {
+      const now = new Date();
+      let y = now.getFullYear() - d.getFullYear();
+      const md = now.getMonth() - d.getMonth();
+      if (md < 0 || (md === 0 && now.getDate() < d.getDate())) y -= 1;
+      return String(y);
+    }
+  }
+  if (storedAge != null && storedAge !== '') return String(storedAge);
+  return '—';
+}
+
+function genderLabelPdf(g) {
+  if (g === 'masculino') return 'Masculino';
+  if (g === 'femenino') return 'Femenino';
+  return g ? String(g) : '—';
+}
+
+class StudentsDemographicsReport extends BaseReport {
+  getPdfFilenamePrefix() {
+    return 'listado-demografico';
+  }
+
+  getReportTitle() {
+    return 'Listado demográfico por grado y sección';
+  }
+
+  getReportSubtitle(data) {
+    return `Total: ${data.total ?? 0} estudiantes${data.filterLabel ? ` — ${data.filterLabel}` : ''}`;
+  }
+
+  getPdfOptions() {
+    return { margin: 40, size: 'A4', layout: 'landscape' };
+  }
+
+  async getData(req) {
+    const { schoolLevel, grade, section } = req.query;
+    const match = { active: { $ne: false } };
+    if (schoolLevel) match.schoolLevel = schoolLevel;
+    if (grade) match.grade = grade;
+    if (section) match.section = section;
+
+    const students = await Student.find(match)
+      .sort({ schoolLevel: 1, grade: 1, section: 1, lastName: 1, firstName: 1 })
+      .select(
+        'firstName lastName schoolLevel grade section studentCardNumber birthDate age birthPlace gender'
+      )
+      .lean();
+
+    const filterParts = [];
+    if (schoolLevel) filterParts.push(schoolLevel);
+    if (grade) filterParts.push(`Grado: ${grade}`);
+    if (section) filterParts.push(`Sección: ${section}`);
+
+    const groups = {};
+    for (const s of students) {
+      const key = `${s.schoolLevel || '—'}|||${s.grade || '—'}|||${s.section || '—'}`;
+      if (!groups[key]) {
+        groups[key] = {
+          schoolLevel: s.schoolLevel || '—',
+          grade: s.grade || '—',
+          section: s.section || '—',
+          students: [],
+        };
+      }
+      groups[key].students.push(s);
+    }
+
+    return {
+      groups: Object.values(groups),
+      total: students.length,
+      filterLabel: filterParts.length ? filterParts.join(' · ') : null,
+    };
+  }
+
+  writePdf(doc, data) {
+    const left = doc.page.margins.left;
+    const usableW = doc.page.width - left - doc.page.margins.right;
+
+    writeMixedLine(doc, left, usableW, [['Total: ', true], [`${data.total ?? 0} estudiante(s)`, false]]);
+    doc.moveDown(0.5);
+
+    for (const group of data.groups || []) {
+      if (doc.y > doc.page.height - 140) doc.addPage();
+
+      doc.font('Helvetica-Bold').fontSize(12).fillColor('#0952C8')
+        .text(
+          `${group.schoolLevel} — Grado ${group.grade} — Sección ${group.section}`,
+          left,
+          doc.y,
+          { continued: true, width: usableW }
+        );
+      doc.font('Helvetica').fontSize(12).fillColor('#555555')
+        .text(`  (${group.students.length} estudiante(s))`, { continued: false });
+
+      doc.moveTo(left, doc.y).lineTo(left + usableW, doc.y)
+        .strokeColor('#0952C8').lineWidth(2).stroke();
+      doc.lineWidth(0.5);
+      doc.moveDown(0.4);
+      doc.fillColor('#000000');
+
+      const rows = group.students.map((s, idx) => [
+        idx + 1,
+        s.studentCardNumber || '—',
+        [s.lastName, s.firstName].filter(Boolean).join(', '),
+        s.birthDate ? new Date(s.birthDate).toLocaleDateString('es') : '—',
+        computeAgeYears(s.birthDate, s.age),
+        (s.birthPlace || '').trim() || '—',
+        genderLabelPdf(s.gender),
+      ]);
+
+      drawPdfTable(doc, {
+        headers: ['N°', 'CE', 'Apellidos y nombres', 'F. nacimiento', 'Edad', 'Lugar nac.', 'Sexo'],
+        rows,
+        colWidths: [28, 72, 148, 78, 36, 130, 72],
+        left,
+        fontSize: 8,
       });
     }
   }
@@ -494,8 +620,9 @@ const institutionalReport = new InstitutionalReport();
 const occupancyReport = new OccupancyReport();
 const enrollmentReport = new EnrollmentByGradeSectionReport();
 const usersRolesReport = new UsersRolesReport();
-const studentsListByGradeSectionReport = new StudentsListByGradeSectionReport();
 
+const studentsListByGradeSectionReport = new StudentsListByGradeSectionReport();
+const studentsDemographicsReport = new StudentsDemographicsReport();
 export const institutional = (req, res, next) => institutionalReport.handle(req, res, next);
 
 export const occupancy = (req, res, next) => occupancyReport.handle(req, res, next);
@@ -505,3 +632,5 @@ export const enrollmentByGradeSection = (req, res, next) => enrollmentReport.han
 export const usersRoles = (req, res, next) => usersRolesReport.handle(req, res, next);
 
 export const studentsListByGradeSection = (req, res, next) => studentsListByGradeSectionReport.handle(req, res, next);
+
+export const studentsDemographics = (req, res, next) => studentsDemographicsReport.handle(req, res, next);
