@@ -4,7 +4,7 @@ import { ROLES } from '../config/constants.js';
 
 export const list = async (req, res, next) => {
   try {
-    const users = await User.find({}).sort({ createdAt: -1 });
+    const users = await User.find({ active: { $ne: false } }).sort({ createdAt: -1 });
     res.json({ ok: true, data: users });
   } catch (err) {
     next(err);
@@ -25,7 +25,7 @@ export const getOne = async (req, res, next) => {
 
 export const verifyUsername = async (req, res, next) => {
   try {
-    const user = await User.findOne({ username: req.params.username });
+    const user = await User.findOne({ username: req.params.username, active: { $ne: false } });
     if (!user) {
       return res.status(404).json({ ok: false, message: 'Usuario no encontrado.' });
     }
@@ -41,6 +41,9 @@ export const verifySecurityAnswers = async (req, res, next) => {
     const user = await User.findById(req.body.userId);
     if (!user) {
       return res.status(404).json({ ok: false, message: 'Usuario no encontrado.' });
+    }
+    if (user.active === false) {
+      return res.status(401).json({ ok: false, message: 'Cuenta no disponible.' });
     }
     const normalized = (s) => String(s || '').toLowerCase().trim();
     const allMatch = req.body.answers.every(
@@ -71,6 +74,9 @@ export const resetPassword = async (req, res, next) => {
     const user = await User.findById(req.body.userId);
     if (!user) {
       return res.status(404).json({ ok: false, message: 'Usuario no encontrado.' });
+    }
+    if (user.active === false) {
+      return res.status(400).json({ ok: false, message: 'Cuenta desactivada.' });
     }
     if (!user.resetToken) {
       return res.status(400).json({ ok: false, message: 'Token de restablecimiento de contraseña no válido.' });
@@ -106,6 +112,12 @@ export const update = async (req, res, next) => {
     const user = await User.findById(req.params.id);
     if (!user) {
       return res.status(404).json({ ok: false, message: 'Usuario no encontrado.' });
+    }
+    if (req.body.active === false && String(user._id) === String(req.user._id)) {
+      return res.status(400).json({
+        ok: false,
+        message: 'No puede desactivar su propia cuenta.',
+      });
     }
     if (user.role === ROLES.DIRECTORA && user.active !== false) {
       const directorsActive = await User.countDocuments({ role: ROLES.DIRECTORA, active: { $ne: false } });

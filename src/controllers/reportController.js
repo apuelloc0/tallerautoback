@@ -491,19 +491,16 @@ class StudentsListByGradeSectionReport extends BaseReport {
   }
 }
 
-function computeAgeYears(birthDate, storedAge) {
-  if (birthDate) {
-    const d = new Date(birthDate);
-    if (!Number.isNaN(d.getTime())) {
-      const now = new Date();
-      let y = now.getFullYear() - d.getFullYear();
-      const md = now.getMonth() - d.getMonth();
-      if (md < 0 || (md === 0 && now.getDate() < d.getDate())) y -= 1;
-      return String(y);
-    }
-  }
-  if (storedAge != null && storedAge !== '') return String(storedAge);
-  return '—';
+/** Edad en años cumplidos: solo fecha de nacimiento vs fecha actual (no usa campo `age` del registro). */
+function computeAgeYearsFromBirthDate(birthDate) {
+  if (!birthDate) return '—';
+  const d = new Date(birthDate);
+  if (Number.isNaN(d.getTime())) return '—';
+  const now = new Date();
+  let y = now.getFullYear() - d.getFullYear();
+  const md = now.getMonth() - d.getMonth();
+  if (md < 0 || (md === 0 && now.getDate() < d.getDate())) y -= 1;
+  return String(Math.max(0, y));
 }
 
 function genderLabelPdf(g) {
@@ -539,7 +536,7 @@ class StudentsDemographicsReport extends BaseReport {
     const students = await Student.find(match)
       .sort({ schoolLevel: 1, grade: 1, section: 1, lastName: 1, firstName: 1 })
       .select(
-        'firstName lastName schoolLevel grade section studentCardNumber birthDate age birthPlace gender'
+        'firstName lastName schoolLevel grade section studentCardNumber birthDate birthPlace gender'
       )
       .lean();
 
@@ -600,7 +597,7 @@ class StudentsDemographicsReport extends BaseReport {
         s.studentCardNumber || '—',
         [s.lastName, s.firstName].filter(Boolean).join(', '),
         s.birthDate ? new Date(s.birthDate).toLocaleDateString('es') : '—',
-        computeAgeYears(s.birthDate, s.age),
+        computeAgeYearsFromBirthDate(s.birthDate),
         (s.birthPlace || '').trim() || '—',
         genderLabelPdf(s.gender),
       ]);
