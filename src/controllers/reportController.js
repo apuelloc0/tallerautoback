@@ -509,6 +509,18 @@ function genderLabelPdf(g) {
   return g ? String(g) : '—';
 }
 
+/** Listado demográfico: mostrar CI si existe; si no, carnet escolar (CE). */
+function formatCiCeDemographics(s) {
+  if (s.idNumber && String(s.idNumber).trim()) {
+    const nat = (s.idNationality && String(s.idNationality).trim()) || 'V';
+    return `${nat}-${String(s.idNumber).trim()}`;
+  }
+  if (s.studentCardNumber && String(s.studentCardNumber).trim()) {
+    return String(s.studentCardNumber).trim();
+  }
+  return '—';
+}
+
 class StudentsDemographicsReport extends BaseReport {
   getPdfFilenamePrefix() {
     return 'listado-demografico';
@@ -536,7 +548,7 @@ class StudentsDemographicsReport extends BaseReport {
     const students = await Student.find(match)
       .sort({ schoolLevel: 1, grade: 1, section: 1, lastName: 1, firstName: 1 })
       .select(
-        'firstName lastName schoolLevel grade section studentCardNumber birthDate birthPlace gender'
+        'firstName lastName schoolLevel grade section studentCardNumber idNumber idNationality birthDate birthPlace gender'
       )
       .lean();
 
@@ -594,7 +606,7 @@ class StudentsDemographicsReport extends BaseReport {
 
       const rows = group.students.map((s, idx) => [
         idx + 1,
-        s.studentCardNumber || '—',
+        formatCiCeDemographics(s),
         [s.lastName, s.firstName].filter(Boolean).join(', '),
         s.birthDate ? new Date(s.birthDate).toLocaleDateString('es') : '—',
         computeAgeYearsFromBirthDate(s.birthDate),
@@ -603,7 +615,7 @@ class StudentsDemographicsReport extends BaseReport {
       ]);
 
       drawPdfTable(doc, {
-        headers: ['N°', 'CE', 'Apellidos y nombres', 'F. nacimiento', 'Edad', 'Lugar nac.', 'Sexo'],
+        headers: ['N°', 'CI/CE', 'Apellidos y nombres', 'F. nacimiento', 'Edad', 'Lugar nac.', 'Sexo'],
         rows,
         colWidths: [28, 72, 148, 78, 36, 130, 72],
         left,

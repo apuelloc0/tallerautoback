@@ -16,6 +16,7 @@ router.post('/upload-support', requirePermission('PAGOS_REGISTRO'), uploadSingle
 
 // Reporte PDF (lista de pagos) y recibo PDF (una transacción)
 router.get('/report/pdf', requirePermission('PAGOS_VER'), payment.reportPdf);
+router.get('/:id/receipt/preview', requirePermission('PAGOS_VER'), param('id').isMongoId(), validate, payment.receiptPreview);
 router.get('/:id/receipt/pdf', requirePermission('PAGOS_VER'), param('id').isMongoId(), validate, payment.receiptPdf);
 
 // Configuración de periodo y monto

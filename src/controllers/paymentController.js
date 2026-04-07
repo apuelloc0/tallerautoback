@@ -463,6 +463,31 @@ export const reportPdf = async (req, res, next) => {
   }
 };
 
+/** JSON: datos del recibo para vista en pantalla (mismo contenido que el PDF). */
+export const receiptPreview = async (req, res, next) => {
+  try {
+    const payment = await Payment.findById(req.params.id).lean();
+    if (!payment) return res.status(404).json({ ok: false, message: 'Pago no encontrado.' });
+    const allocations = await PaymentAllocation.find({ payment: payment._id })
+      .populate('student', studentSelect)
+      .populate('cutOffDate')
+      .lean();
+    const institution = await loadInstitutionGeneral();
+    res.json({
+      ok: true,
+      data: { payment, allocations },
+      header: {
+        generatedAt: new Date().toISOString(),
+        institution,
+        reportTitle: 'Recibo de pago',
+        reportSubtitle: payment.paidAt ? new Date(payment.paidAt).toLocaleString('es') : '',
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 /** PDF: recibo de una transacción (detalle) */
 export const receiptPdf = async (req, res, next) => {
   try {
