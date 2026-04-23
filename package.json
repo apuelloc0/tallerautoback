@@ -1,7 +1,7 @@
 {
-  "name": "students-back",
+  "name": "autotaller-back",
   "version": "1.0.0",
-  "description": "Backend sistema de gestión de estudiantes - Node, Express, MongoDB",
+  "description": "Backend para el sistema de gestión de taller mecánico - Node, Express, Supabase",
   "type": "module",
   "main": "src/server.js",
   "scripts": {
@@ -10,9 +10,10 @@
     "seed": "node scripts/seed-admin.js"
   },
   "keywords": [
-    "students",
+    "taller",
     "express",
-    "mongodb"
+    "supabase",
+    "saas"
   ],
   "author": "",
   "license": "ISC",
