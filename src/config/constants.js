@@ -1,64 +1,38 @@
 /**
- * Roles del sistema (2 niveles: alta = DIRECTORA, resto = ADMINISTRADOR/SECRETARIA)
- * DIRECTORA: acceso total
- * ADMINISTRADOR: registro de pagos, solvencias, registro de estudiantes
- * SECRETARIA: consulta de estudiantes y datos académicos de referencia
+ * Roles del sistema Taller Automotriz (Sistema Interno)
  */
 export const ROLES = {
-  DIRECTORA: 'DIRECTORA',
-  ADMINISTRADOR: 'ADMINISTRADOR',
-  SECRETARIA: 'SECRETARIA',
+  ADMINISTRADOR: 'ADMINISTRADOR', // Dueño / Gerente: Acceso total
+  RECEPCIONISTA: 'RECEPCIONISTA', // Registro de vehículos, clientes y facturación
+  TECNICO: 'TECNICO',             // Gestión de reparaciones, notas y repuestos
 };
 
 /** Quién puede ver cada recurso */
 export const PERMISSIONS = {
-  // SECRETARIA: solo reportes (sin acceso a gestión/consulta de estudiantes)
-  ESTUDIANTES_LISTA: [ROLES.DIRECTORA, ROLES.ADMINISTRADOR],
-  ESTUDIANTES_REGISTRO: [ROLES.DIRECTORA, ROLES.ADMINISTRADOR],
-  ESTUDIANTES_MODIFICACION: [ROLES.DIRECTORA, ROLES.ADMINISTRADOR],
-  PAGOS_REGISTRO: [ROLES.DIRECTORA, ROLES.ADMINISTRADOR],
-  /** Solo consulta: listar pagos, historial, resumen (sin crear/editar) */
-  PAGOS_VER: [ROLES.DIRECTORA, ROLES.ADMINISTRADOR],
-  SOLVENCIAS: [ROLES.DIRECTORA, ROLES.ADMINISTRADOR],
-  USUARIOS_GESTION: [ROLES.DIRECTORA],
-  REPORTES: [ROLES.DIRECTORA, ROLES.ADMINISTRADOR, ROLES.SECRETARIA],
-  RESPALDO: [ROLES.DIRECTORA],
+  USUARIOS_GESTION: [ROLES.ADMINISTRADOR],
+  VEHICULOS_GESTION: [ROLES.ADMINISTRADOR, ROLES.RECEPCIONISTA],
+  ORDENES_GESTION: [ROLES.ADMINISTRADOR, ROLES.RECEPCIONISTA],
+  ORDENES_TECNICO: [ROLES.ADMINISTRADOR, ROLES.TECNICO],
+  FACTURACION_GESTION: [ROLES.ADMINISTRADOR, ROLES.RECEPCIONISTA],
+  INVENTARIO_GESTION: [ROLES.ADMINISTRADOR, ROLES.RECEPCIONISTA, ROLES.TECNICO],
+  REPORTES_FULL: [ROLES.ADMINISTRADOR],
+  CONFIGURACION: [ROLES.ADMINISTRADOR],
 };
 
-export const SCHOOL_LEVEL = {
-  PREESCOLAR: 'PREESCOLAR',
-  PRIMARIA: 'PRIMARIA',
-  LICEO: 'LICEO',
+/** Estados de la Orden de Servicio */
+export const ORDER_STATUS = {
+  INGRESADO: 'INGRESADO',
+  DIAGNOSTICO: 'DIAGNOSTICO',
+  ESPERA_REPUESTOS: 'ESPERA_REPUESTOS',
+  EN_REPARACION: 'EN_REPARACION',
+  PRUEBA_RUTA: 'PRUEBA_RUTA',
+  LISTO: 'LISTO',
+  ENTREGADO: 'ENTREGADO',
 };
 
-export const SCHOOL_LEVEL_LIST = Object.values(SCHOOL_LEVEL);
-
-/** Niveles de preescolar (etiqueta en UI: Nivel) */
-export const PREESCOLAR_GRADES = ['M1', 'M2', 'M3'];
-
-/** Grados de primaria */
-export const PRIMARIA_GRADES = ['1', '2', '3', '4', '5', '6'];
-
-/** Años de liceo */
-export const LICEO_GRADES = ['1', '2', '3', '4', '5'];
+export const ORDER_STATUS_LIST = Object.values(ORDER_STATUS);
 
 /** Prefijos moviles Venezuela 04xx (solo digitos, sin espacios; sin lineas fijas 02xx) */
 export const PHONE_PREFIXES = [
   '0412', '0414', '0416', '0422', '0424', '0426',
 ];
-
-/** Cédula: solo parte numérica */
-export const CI_DIGITS_MIN = 6;
-export const CI_DIGITS_MAX = 9;
-
-/** Tras el prefijo (7 dígitos línea local típica móvil VE) */
-export const PHONE_LOCAL_DIGITS = 7;
-
-/** Inscripción: referencia de cupos (global) */
-export const INSCRIPTION = {
-  YEARS: [1, 2, 3, 4, 5],
-  SECTIONS_PER_YEAR: 2,
-  TOTAL_SECTIONS: 10,
-  CLASSROOMS_AVAILABLE: 13,
-  MAX_STUDENTS_PER_SECTION: 40,
-};

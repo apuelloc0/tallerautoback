@@ -1,18 +1,16 @@
-import mongoose from 'mongoose';
+import 'dotenv/config';
+import { createClient } from '@supabase/supabase-js';
 
-const connectDB = async () => {
-  try {
-    const conn = await mongoose.connect(process.env.MONGODB_URI);
-    console.log(`MongoDB conectado: ${conn.connection.host}`);
-  } catch (error) {
-    console.log("Error conectando a MongoDB 222:", error);
-    console.error('Error conectando a MongoDB:', error.message);
-    process.exit(1);
-  }
-};
+// Usaremos el Service Role Key en el backend para tener acceso administrativo
+// Estas variables deben estar en tu archivo .env
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-mongoose.connection.on('disconnected', () => {
-  console.log('MongoDB desconectado');
-});
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error('❌ Error fatal: SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY no están definidas en el archivo .env');
+}
 
-export default connectDB;
+const supabase = createClient(supabaseUrl, supabaseKey);
+console.log('✅ Cliente de Supabase inicializado correctamente.');
+
+export default supabase;

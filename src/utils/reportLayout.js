@@ -1,7 +1,8 @@
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import AcademicConfig from '../models/AcademicConfig.js';
+import supabase from '../config/db.js';
+import { WORKSHOP_CONFIG_TABLE } from '../models/WorkshopConfig.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -35,26 +36,27 @@ export function resolveLogoAbsolutePath(logoUrl) {
 }
 
 export async function loadInstitutionGeneral() {
-  const doc = await AcademicConfig.findOne().lean();
-  const g = doc?.general && typeof doc.general === 'object' ? doc.general : {};
-  const activeYear = (doc?.anosEscolares || []).find((a) => a.activo)?.nombre || '';
+  const { data: g, error } = await supabase
+    .from(WORKSHOP_CONFIG_TABLE)
+    .select('*')
+    .eq('id', 1)
+    .single();
+
+  if (error && error.code !== 'PGRST116') console.error('Error cargando config:', error);
+
   return {
-    nombreInstitucion: String(g.nombreInstitucion || 'Unidad Educativa Privada').trim(),
-    rif: String(g.rif || '').trim(),
-    telefono: String(g.telefono || '').trim(),
-    email: String(g.email || '').trim(),
-    direccion: String(g.direccion || '').trim(),
-    ciudad: String(g.ciudad || 'Caracas').trim(),
-    estado: String(g.estado || '').trim(),
-    municipio: String(g.municipio || '').trim(),
-    codigoInstitucion: String(g.codigoInstitucion || '').trim(),
-    logoUrl: String(g.logoUrl || '').trim(),
-    directorTitle: String(g.directorTitle || '').trim(),
-    directorName: String(g.directorName || '').trim(),
-    directorIdNationality: String(g.directorIdNationality || 'V').trim(),
-    directorIdNumber: String(g.directorIdNumber || '').trim(),
-    directorRole: String(g.directorRole || 'DIRECTOR(A)').trim(),
-    activeSchoolYear: activeYear,
+    nombreInstitucion: String(g?.workshop_name || 'AutoTaller').trim(),
+    rif: String(g?.rif || '').trim(),
+    telefono: String(g?.phone || '').trim(),
+    email: String(g?.email || '').trim(),
+    direccion: String(g?.address || '').trim(),
+    ciudad: String(g?.city || 'Caracas').trim(),
+    logoUrl: String(g?.logo_url || '').trim(),
+    // Campos legacy para compatibilidad con el motor de reportes
+    directorTitle: '',
+    directorName: '',
+    directorRole: 'GERENTE',
+    activeSchoolYear: '',
   };
 }
 

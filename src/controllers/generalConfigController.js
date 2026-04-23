@@ -1,27 +1,21 @@
-import AcademicConfig from '../models/AcademicConfig.js';
+import supabase from '../config/db.js';
+import { WORKSHOP_CONFIG_TABLE } from '../models/WorkshopConfig.js';
 import { getPublicPath } from '../config/upload.js';
 
 export const DEFAULT_GENERAL = {
-  nombreInstitucion: 'Unidad Educativa Privada',
+  workshop_name: 'AutoTaller',
   rif: 'J-12345678-9',
-  direccion: 'Av. Principal, Sector Centro',
-  ciudad: 'Caracas',
-  estado: '',
-  municipio: '',
-  codigoInstitucion: '',
-  telefono: '0212-1234567',
+  address: 'Av. Principal, Sector Centro',
+  city: 'Caracas',
+  phone: '0412-1234567',
   email: 'contacto@institucion.edu.ve',
-  idioma: 'es',
-  logoUrl: '',
-  directorTitle: '',
-  directorName: '',
-  directorIdNationality: 'V',
-  directorIdNumber: '',
-  directorRole: 'DIRECTOR(A)',
-  tasaUsdBs: null,
+  logo_url: '',
+  hour_rate_usd: 0,
+  tax_percentage: 16,
+  currency_rate_usd_ves: null,
 };
 
-function normalizeTasaUsdBs(v) {
+function normalizeRate(v) {
   if (v === '' || v === null || v === undefined) return null;
   const n = typeof v === 'number' ? v : Number(String(v).replace(',', '.'));
   if (!Number.isFinite(n) || n <= 0) return null;
@@ -30,37 +24,36 @@ function normalizeTasaUsdBs(v) {
 
 function buildGeneralPayload(body = {}) {
   return {
-    nombreInstitucion: String(body.nombreInstitucion ?? DEFAULT_GENERAL.nombreInstitucion).trim(),
+    workshop_name: String(body.workshop_name ?? DEFAULT_GENERAL.workshop_name).trim(),
     rif: String(body.rif ?? '').trim(),
-    telefono: String(body.telefono ?? '').trim(),
+    phone: String(body.phone ?? '').trim(),
     email: String(body.email ?? '').trim(),
-    direccion: String(body.direccion ?? '').trim(),
-    ciudad: String(body.ciudad ?? DEFAULT_GENERAL.ciudad).trim(),
-    estado: String(body.estado ?? '').trim(),
-    municipio: String(body.municipio ?? '').trim(),
-    codigoInstitucion: String(body.codigoInstitucion ?? '').trim(),
-    idioma: String(body.idioma ?? DEFAULT_GENERAL.idioma).trim(),
-    logoUrl: String(body.logoUrl ?? '').trim(),
-    directorTitle: String(body.directorTitle ?? '').trim(),
-    directorName: String(body.directorName ?? '').trim(),
-    directorIdNationality: String(body.directorIdNationality ?? 'V').trim(),
-    directorIdNumber: String(body.directorIdNumber ?? '').trim(),
-    directorRole: String(body.directorRole ?? 'DIRECTOR(A)').trim(),
-    tasaUsdBs: normalizeTasaUsdBs(body.tasaUsdBs),
+    address: String(body.address ?? '').trim(),
+    city: String(body.city ?? DEFAULT_GENERAL.city).trim(),
+    logo_url: String(body.logo_url ?? '').trim(),
+    hour_rate_usd: normalizeRate(body.hour_rate_usd) || 0,
+    tax_percentage: normalizeRate(body.tax_percentage) || 16,
+    currency_rate_usd_ves: normalizeRate(body.currency_rate_usd_ves),
   };
 }
 
 export const getPublicInfo = async (req, res, next) => {
   try {
-    const doc = await AcademicConfig.findOne().lean();
-    const general = doc?.general ?? {};
+    const { data: general, error } = await supabase
+      .from(WORKSHOP_CONFIG_TABLE)
+      .select('*')
+      .eq('id', 1)
+      .single();
+
+    if (error && error.code !== 'PGRST116') throw error;
+
+    const config = general || DEFAULT_GENERAL;
     res.json({
       ok: true,
       data: {
-        nombreInstitucion: general.nombreInstitucion || DEFAULT_GENERAL.nombreInstitucion,
-        rif: general.rif || DEFAULT_GENERAL.rif,
-        codigoInstitucion: general.codigoInstitucion || DEFAULT_GENERAL.codigoInstitucion,
-        tasaUsdBs: general.tasaUsdBs != null && general.tasaUsdBs > 0 ? general.tasaUsdBs : null,
+        workshop_name: config.workshop_name,
+        rif: config.rif,
+        currency_rate_usd_ves: config.currency_rate_usd_ves,
       },
     });
   } catch (err) {
@@ -70,11 +63,14 @@ export const getPublicInfo = async (req, res, next) => {
 
 export const getConfig = async (req, res, next) => {
   try {
-    const doc = await AcademicConfig.findOne().lean();
-    const general = doc?.general && typeof doc.general === 'object'
-      ? { ...DEFAULT_GENERAL, ...doc.general, logoUrl: doc.general.logoUrl ?? '' }
-      : { ...DEFAULT_GENERAL };
-    res.json({ ok: true, data: general });
+    const { data, error } = await supabase
+      .from(WORKSHOP_CONFIG_TABLE)
+      .select('*')
+      .eq('id', 1)
+      .single();
+
+    if (error && error.code !== 'PGRST116') throw error;
+    res.json({ ok: true, data: data || DEFAULT_GENERAL });
   } catch (err) {
     next(err);
   }
@@ -82,19 +78,21 @@ export const getConfig = async (req, res, next) => {
 
 export const updateConfig = async (req, res, next) => {
   try {
-    const existing = await AcademicConfig.findOne().lean();
-    const prev = existing?.general && typeof existing.general === 'object' ? existing.general : {};
+    const { data: prev } = await supabase.from(WORKSHOP_CONFIG_TABLE).select('*').eq('id', 1).single();
+    
     const body = req.body || {};
     const payload = buildGeneralPayload({
-      ...prev,
+      ...(prev || DEFAULT_GENERAL),
       ...body,
-      logoUrl: body.logoUrl !== undefined ? body.logoUrl : (prev.logoUrl ?? ''),
+      logo_url: body.logo_url !== undefined ? body.logo_url : (prev?.logo_url ?? ''),
     });
-    await AcademicConfig.findOneAndUpdate(
-      {},
-      { $set: { general: payload } },
-      { new: true, upsert: true, setDefaultsOnInsert: true }
-    );
+
+    const { error } = await supabase
+      .from(WORKSHOP_CONFIG_TABLE)
+      .upsert({ id: 1, ...payload, updated_at: new Date() });
+
+    if (error) throw error;
+
     res.json({ ok: true, data: payload, message: 'Configuración general guardada.' });
   } catch (err) {
     next(err);
@@ -108,15 +106,14 @@ export const uploadLogo = async (req, res, next) => {
       return res.status(400).json({ ok: false, message: 'Archivo de imagen requerido.' });
     }
     const url = getPublicPath(req, req.file);
-    const existing = await AcademicConfig.findOne().lean();
-    const prev = existing?.general && typeof existing.general === 'object' ? existing.general : {};
-    const payload = buildGeneralPayload({ ...DEFAULT_GENERAL, ...prev, logoUrl: url });
-    await AcademicConfig.findOneAndUpdate(
-      {},
-      { $set: { general: payload } },
-      { new: true, upsert: true, setDefaultsOnInsert: true }
-    );
-    res.json({ ok: true, data: { logoUrl: url }, message: 'Logo actualizado.' });
+    
+    const { error } = await supabase
+      .from(WORKSHOP_CONFIG_TABLE)
+      .update({ logo_url: url, updated_at: new Date() })
+      .eq('id', 1);
+
+    if (error) throw error;
+    res.json({ ok: true, data: { logo_url: url }, message: 'Logo actualizado.' });
   } catch (err) {
     next(err);
   }

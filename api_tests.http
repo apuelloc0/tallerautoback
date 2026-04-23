@@ -1,0 +1,117 @@
+@hostname = localhost
+@port = 4000
+@host = http://{{hostname}}:{{port}}/api
+@contentType = application/json
+
+### 1. Login para obtener Token
+# @name login
+POST {{host}}/auth/login
+Content-Type: {{contentType}}
+
+{
+    "username": "admin",
+    "password": "adminpassword"
+}
+
+### Guardar el token de la respuesta anterior
+@token = {{login.response.body.token}}
+
+### 2. Crear un Cliente
+# @name createClient
+POST {{host}}/clients
+Authorization: Bearer {{token}}
+Content-Type: {{contentType}}
+
+{
+    "first_name": "Juan",
+    "last_name": "Perez",
+    "id_number": "V-12345678",
+    "phone": "04121234567",
+    "email": "juan@example.com"
+}
+
+###
+@clientId = {{createClient.response.body.data.id}}
+
+### 3. Crear un Vehículo para ese Cliente
+# @name createVehicle
+POST {{host}}/vehicles
+Authorization: Bearer {{token}}
+Content-Type: {{contentType}}
+
+{
+    "client_id": "{{clientId}}",
+    "plate": "XYZ999",
+    "brand": "Toyota",
+    "model": "Corolla",
+    "year": 2022,
+    "color": "Gris"
+}
+
+###
+@vehicleId = {{createVehicle.response.body.data.id}}
+
+### 4. Crear una Orden de Servicio
+# @name createOrder
+POST {{host}}/service-orders
+Authorization: Bearer {{token}}
+Content-Type: {{contentType}}
+
+{
+    "client_id": "{{clientId}}",
+    "vehicle_id": "{{vehicleId}}",
+    "fault_description": "El carro vibra al frenar",
+    "description": "Revisión preventiva de los 5000km",
+    "status": "INGRESADO"
+}
+
+###
+@orderId = {{createOrder.response.body.data.id}}
+
+### 4.1 Agregar un Repuesto a la Orden
+# @name addPart
+POST {{host}}/service-orders/items
+Authorization: Bearer {{token}}
+Content-Type: {{contentType}}
+
+{
+    "order_id": "{{orderId}}",
+    "description": "Filtro de Aceite",
+    "quantity": 1,
+    "price": 15.50,
+    "type": "REPUESTO"
+}
+
+### 4.2 Agregar Mano de Obra
+POST {{host}}/service-orders/items
+Authorization: Bearer {{token}}
+Content-Type: {{contentType}}
+
+{
+    "order_id": "{{orderId}}",
+    "description": "Cambio de aceite motor",
+    "quantity": 1,
+    "price": 20.00,
+    "type": "SERVICIO"
+}
+
+### 5. Generar Factura de la Orden (Cierre de cuenta)
+# @name createInvoice
+POST {{host}}/billing/invoices
+Authorization: Bearer {{token}}
+Content-Type: {{contentType}}
+
+{
+    "order_id": "{{orderId}}"
+}
+
+###
+@invoiceId = {{createInvoice.response.body.data.id}}
+
+### 5.1 Ver PDF de la Factura (Link)
+GET {{host}}/billing/invoices/{{invoiceId}}/pdf
+Authorization: Bearer {{token}}
+
+### 6. Ver Estadísticas del Dashboard (KPIs actualizados)
+GET {{host}}/dashboard
+Authorization: Bearer {{token}}
