@@ -14,6 +14,11 @@ export const listInvoices = async (req, res, next) => {
       .from('invoices')
       .select('*, clients(*), service_orders(*)');
 
+    // SEGURIDAD SaaS: Filtrar por taller
+    if (req.user.role !== 'SUPER_ADMIN') {
+      query = query.eq('workshop_id', req.user.workshop_id);
+    }
+
     if (status) query = query.eq('status', status);
     if (clientId) query = query.eq('client_id', clientId);
 
@@ -41,8 +46,8 @@ export const createInvoice = async (req, res, next) => {
     if (orderError || !order) return res.status(404).json({ ok: false, message: 'Orden no encontrada' });
 
     // 2. Obtener configuración para el IVA
-    const { data: config } = await supabase.from(WORKSHOP_CONFIG_TABLE).select('*').eq('id', 1).single();
-    const taxPercentage = config?.tax_percentage || 16;
+    // SEGURIDAD SaaS: Usar la tasa configurada en el taller del usuario, no una global con ID 1
+    const taxPercentage = req.user.tax_rate || 16;
 
     // 3. Calcular totales
     const partsTotal = order.order_items.reduce((acc, item) => acc + (Number(item.price) * item.quantity), 0);
@@ -57,6 +62,7 @@ export const createInvoice = async (req, res, next) => {
       .insert([{
         order_id,
         client_id: order.client_id,
+        workshop_id: order.workshop_id || req.user.workshop_id, // Fallback al taller del usuario
         subtotal_usd: subtotal,
         tax_usd: tax,
         total_usd: total,
@@ -80,12 +86,14 @@ export const createInvoice = async (req, res, next) => {
 export const addPayment = async (req, res, next) => {
   try {
     const { invoice_id, amount_usd, payment_method, reference_number } = req.body;
+    const workshop_id = req.user.workshop_id;
 
     const { data: payment, error } = await supabase
       .from(PAYMENTS_TABLE)
       .insert([{
         invoice_id,
         amount_usd,
+        workshop_id, // Aislamiento del pago por taller
         payment_method,
         reference_number,
         paid_at: new Date()
@@ -115,6 +123,7 @@ export const invoicePdf = async (req, res, next) => {
       .select(`
         *,
         clients(*),
+        workshops(*),
         service_orders(
           *,
           vehicles(*),
@@ -126,16 +135,28 @@ export const invoicePdf = async (req, res, next) => {
 
     if (error || !invoice) return res.status(404).json({ ok: false, message: 'Factura no encontrada' });
 
+    // SEGURIDAD SaaS: Verificar pertenencia antes de generar PDF
+    if (req.user.role !== 'SUPER_ADMIN' && invoice.workshop_id !== req.user.workshop_id) {
+      return res.status(403).json({ ok: false, message: 'No tiene permiso para ver esta factura.' });
+    }
+
     const filename = `factura-${invoice.id.slice(0, 8)}.pdf`;
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
-    const institution = await loadInstitutionGeneral();
+    // SEGURIDAD SaaS: Cargamos la info del taller desde la relación de la factura
+    const workshopInfo = invoice.workshops || {
+      workshop_name: req.user.workshop_name,
+      address: req.user.address,
+      phone: req.user.phone,
+      rif: req.user.rif || ''
+    };
+
     const doc = new PDFDocument({ margin: 50, size: 'A4' });
     doc.pipe(res);
 
     drawReportHeader(doc, {
-      institution,
+      institution: workshopInfo,
       reportTitle: 'FACTURA DE SERVICIO',
       reportSubtitle: `Factura N°: ${invoice.id.slice(0, 8)}`
     });
