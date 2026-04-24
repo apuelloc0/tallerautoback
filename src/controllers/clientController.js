@@ -56,15 +56,22 @@ export const getOne = async (req, res, next) => {
 export const create = async (req, res, next) => {
   try {
     const { id_number } = req.body;
-    const clientData = { ...req.body, workshop_id: req.user.workshop_id };
+    const workshop_id = req.user?.workshop_id;
+
+    // SEGURIDAD SaaS: No permitir crear clientes sin un taller asociado
+    if (!workshop_id && req.user?.role !== 'SUPER_ADMIN') {
+      return res.status(403).json({ ok: false, message: 'No se pudo identificar tu taller. Por favor, reinicia sesión.' });
+    }
 
     // Verificar si el ID (Cédula/RIF) ya existe
     if (id_number) {
-      const { data: existing } = await supabase
+      const { data: existing, error: checkError } = await supabase
         .from(CLIENTS_TABLE)
         .select('id, first_name, last_name')
         .eq('id_number', id_number)
-        .single();
+        .maybeSingle(); // Usamos maybeSingle para que no lance error si no existe
+
+      if (checkError) throw checkError;
       
       if (existing) {
         return res.status(400).json({ 
@@ -73,6 +80,9 @@ export const create = async (req, res, next) => {
         });
       }
     }
+
+    const clientData = { ...req.body, workshop_id };
+    console.log('DEBUG [CLIENT_CREATE]: Datos a insertar:', JSON.stringify(clientData, null, 2));
 
     const { data, error } = await supabase
       .from(CLIENTS_TABLE)

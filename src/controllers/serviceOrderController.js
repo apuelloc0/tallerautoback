@@ -128,8 +128,8 @@ export const update = async (req, res, next) => {
     // SEGURIDAD SaaS: Solo el Administrador puede dar el 'Veredicto Final' (LISTO o ENTREGADO)
     if (status) {
       const upperStatus = status.toUpperCase();
-      if ((upperStatus === 'LISTO' || upperStatus === 'ENTREGADO') && req.user.role !== 'ADMINISTRADOR') {
-        return res.status(403).json({ ok: false, message: 'La autorización de entrega final requiere el veredicto de un Administrador.' });
+      if ((upperStatus === 'LISTO' || upperStatus === 'ENTREGADO') && !['ADMINISTRADOR', 'SUPER_ADMIN'].includes(req.user.role)) {
+        return res.status(403).json({ ok: false, message: 'No tienes permisos para autorizar la entrega final.' });
       }
     }
 

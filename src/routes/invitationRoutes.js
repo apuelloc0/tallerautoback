@@ -13,6 +13,7 @@ router.use(authenticate);
 // Se recomienda crear un rol 'SUPER_ADMIN' en la base de datos solo para tu usuario.
 router.post('/generate', requireRole('SUPER_ADMIN'), invitation.generateOwnerCode);
 router.get('/', requireRole('SUPER_ADMIN'), invitation.listCodes);
+router.get('/archives', requireRole('SUPER_ADMIN'), invitation.listArchives);
 router.delete('/:id', requireRole('SUPER_ADMIN'), invitation.removeCode);
 router.get('/workshops', requireRole('SUPER_ADMIN'), invitation.listWorkshops);
 // Permitimos ADMINISTRADOR para que puedan usar la página de Configuración

@@ -5,16 +5,17 @@ import { ROLES } from '../config/constants.js';
 
 export const list = async (req, res, next) => {
   try {
-    // SEGURIDAD SaaS: Los Super Admin no deben gestionar personal de talleres individuales
-    if (req.user.role === 'SUPER_ADMIN') {
-      return res.status(403).json({ ok: false, message: 'El Super Admin no gestiona personal de talleres.' });
-    }
+    const userRole = String(req.user.role || '').toUpperCase();
+    let query = supabase.from('users').select('*');
 
-    if (!req.user.workshop_id) {
-      return res.status(403).json({ ok: false, message: 'No tienes un taller asociado.' });
+    // SEGURIDAD SaaS: Si NO es Super Admin, filtrar obligatoriamente por su taller
+    if (userRole !== 'SUPER_ADMIN' && userRole !== 'GOD_MODE') { // 'GOD_MODE' opcional para emergencias
+      if (!req.user.workshop_id) {
+        console.error(`[USER_LIST_403] Usuario ${req.user.id} sin workshop_id y rol ${userRole}`);
+        return res.status(403).json({ ok: false, message: 'No tienes un taller asociado.' });
+      }
+      query = query.eq('workshop_id', req.user.workshop_id);
     }
-
-    let query = supabase.from('users').select('*').eq('workshop_id', req.user.workshop_id);
 
     const { data, error } = await query.order('created_at', { ascending: false });
 
