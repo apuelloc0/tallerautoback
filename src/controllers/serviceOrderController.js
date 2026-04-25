@@ -125,11 +125,11 @@ export const update = async (req, res, next) => {
       updated_at: new Date()
     };
 
-    // SEGURIDAD SaaS: Solo el Administrador puede dar el 'Veredicto Final' (LISTO o ENTREGADO)
+    // SEGURIDAD SaaS: Solo el Administrador puede marcar la orden como ENTREGADO
     if (status) {
       const upperStatus = status.toUpperCase();
-      if ((upperStatus === 'LISTO' || upperStatus === 'ENTREGADO') && !['ADMINISTRADOR', 'SUPER_ADMIN'].includes(req.user.role)) {
-        return res.status(403).json({ ok: false, message: 'No tienes permisos para autorizar la entrega final.' });
+      if (upperStatus === 'ENTREGADO' && !['ADMINISTRADOR', 'SUPER_ADMIN'].includes(req.user.role)) {
+        return res.status(403).json({ ok: false, message: 'Solo un administrador puede marcar la orden como entregada al cliente.' });
       }
     }
 

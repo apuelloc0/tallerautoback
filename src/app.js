@@ -13,6 +13,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 
+// IMPORTANTE para Render/Heroku: Confía en el proxy para obtener la IP real del cliente
+app.set('trust proxy', 1);
+
 app.use(helmet({ contentSecurityPolicy: false }));
 
 // Configuración de CORS flexible para fase de pruebas intensivas
@@ -29,8 +32,8 @@ app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 // Configuración de seguridad: Limitador de peticiones para producción
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 2000, // Elevado a 2000 para que nadie sea bloqueado mientras prueba el sistema
-  message: { ok: false, message: 'Demasiadas peticiones desde esta IP, por favor intente de nuevo más tarde.' }
+  max: 2000, // Muy elevado para que nadie sea bloqueado durante pruebas o uso normal
+  message: { ok: false, message: 'Nuestros servidores están experimentando una alta demanda. Por favor, inténtelo de nuevo en unos minutos.' }
 });
 
 const uploadsPath = process.env.UPLOAD_PATH || path.join(__dirname, '..', 'uploads');

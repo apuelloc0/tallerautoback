@@ -88,6 +88,19 @@ export const addPayment = async (req, res, next) => {
     const { invoice_id, amount_usd, payment_method, reference_number } = req.body;
     const workshop_id = req.user.workshop_id;
 
+    // SEGURIDAD SaaS: Verificar que la factura pertenezca al taller del usuario
+    if (req.user.role !== 'SUPER_ADMIN') {
+      const { data: invoiceCheck, error: checkError } = await supabase
+        .from('invoices')
+        .select('workshop_id')
+        .eq('id', invoice_id)
+        .single();
+
+      if (checkError || !invoiceCheck || invoiceCheck.workshop_id !== workshop_id) {
+        return res.status(403).json({ ok: false, message: 'No tiene permiso para registrar pagos en esta factura.' });
+      }
+    }
+
     const { data: payment, error } = await supabase
       .from(PAYMENTS_TABLE)
       .insert([{
