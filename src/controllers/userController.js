@@ -9,11 +9,13 @@ export const list = async (req, res, next) => {
     let query = supabase.from('users').select('*');
 
     // SEGURIDAD SaaS: Si NO es Super Admin, filtrar obligatoriamente por su taller
-    if (userRole !== 'SUPER_ADMIN' && userRole !== 'GOD_MODE') { // 'GOD_MODE' opcional para emergencias
-      if (!req.user.workshop_id) {
-        console.error(`[USER_LIST_403] Usuario ${req.user.id} sin workshop_id y rol ${userRole}`);
-        return res.status(403).json({ ok: false, message: 'No tienes un taller asociado.' });
-      }
+    if (userRole === 'SUPER_ADMIN') {
+      const filterWsId = req.query.workshopId || req.query.workshop_id;
+      // El Super Admin en la lista general solo ve a otros Super Admins (lo que le compete)
+      // o filtra por taller si está realizando una auditoría.
+      query = filterWsId ? query.eq('workshop_id', filterWsId) : query.eq('role', 'SUPER_ADMIN');
+    } else if (userRole !== 'GOD_MODE') {
+      if (!req.user.workshop_id) return res.status(403).json({ ok: false, message: 'No tienes un taller asociado.' });
       query = query.eq('workshop_id', req.user.workshop_id);
     }
 

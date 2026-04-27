@@ -17,7 +17,12 @@ export const list = async (req, res, next) => {
       `);
 
     // SEGURIDAD SaaS: Filtrar por taller
-    if (req.user.role !== 'SUPER_ADMIN') {
+    // El Super Admin solo ve órdenes si especifica un taller (Soporte)
+    // o si busca registros huérfanos (null) para limpieza de datos.
+    if (req.user.role === 'SUPER_ADMIN') {
+      const filterWsId = req.query.workshopId || req.query.workshop_id;
+      query = filterWsId ? query.eq('workshop_id', filterWsId) : query.is('workshop_id', null);
+    } else {
       query = query.eq('workshop_id', req.user.workshop_id);
     }
 
@@ -66,7 +71,7 @@ export const getOne = async (req, res, next) => {
 /** Crear nueva orden */
 export const create = async (req, res, next) => {
   try {
-    const { client_id, vehicle_id, diagnosis, fault_description, status, technician_id, fuel_level, reception_checklist } = req.body;
+    const { client_id, vehicle_id, diagnosis, fault_description, status, technician_id, fuel_level, reception_checklist, images } = req.body;
     
     // Validación básica preventiva
     if (!client_id || !vehicle_id) {
@@ -86,6 +91,7 @@ export const create = async (req, res, next) => {
         fault_description,
         fuel_level,
         reception_checklist,
+        images: images || [],
         status: status || 'INGRESADO',
         technician_id,
         created_at: new Date(),
@@ -116,12 +122,12 @@ export const update = async (req, res, next) => {
   try {
     const { 
       client_id, vehicle_id, diagnosis, fault_description, 
-      status, technician_id, fuel_level, reception_checklist 
+      status, technician_id, fuel_level, reception_checklist, images
     } = req.body;
 
     const updateData = {
       client_id, vehicle_id, diagnosis, fault_description,
-      status, technician_id, fuel_level, reception_checklist,
+      status, technician_id, fuel_level, reception_checklist, images,
       updated_at: new Date()
     };
 
@@ -320,6 +326,39 @@ export const remove = async (req, res, next) => {
     const { error } = await query;
     if (error) throw error;
     res.json({ ok: true, message: 'Orden eliminada.' });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/** Subir imagen a Supabase Storage (Buckets) */
+export const uploadImage = async (req, res, next) => {
+  try {
+    const file = req.file;
+    if (!file) return res.status(400).json({ ok: false, message: 'No se recibió ninguna imagen.' });
+
+    // SEGURIDAD SaaS: Organizamos por ID de taller para aislamiento físico
+    const fileExt = file.originalname.split('.').pop();
+    const fileName = `${req.user.workshop_id}/${Date.now()}.${fileExt}`;
+
+    const { data, error } = await supabase.storage
+      .from('peritaje') // Asegúrate de crear este bucket en el panel de Supabase
+      .upload(fileName, file.buffer, {
+        contentType: file.mimetype,
+        upsert: false
+      });
+
+    if (error) {
+      console.error('❌ Error de Storage:', error);
+      return res.status(500).json({ ok: false, message: 'Error al guardar en el almacén de fotos.' });
+    }
+
+    // Obtener la URL pública para guardarla en la base de datos
+    const { data: { publicUrl } } = supabase.storage
+      .from('peritaje')
+      .getPublicUrl(fileName);
+
+    res.json({ ok: true, url: publicUrl });
   } catch (err) {
     next(err);
   }

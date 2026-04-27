@@ -23,13 +23,14 @@ export const list = async (req, res, next) => {
 /** Crear un nuevo repuesto */
 export const create = async (req, res, next) => {
   try {
-    const { code, name, category, stock, minStock, price } = req.body;
+    const { code, name, category, stock, minStock, price, currency } = req.body;
     const { data, error } = await supabase
       .from('inventory')
       .insert([{ 
         code, 
         name, 
         category, 
+        currency: currency || 'COP',
         workshop_id: req.user.workshop_id,
         stock: parseInt(stock) || 0, 
         min_stock: parseInt(minStock ?? 5) || 0, 
@@ -54,18 +55,17 @@ export const create = async (req, res, next) => {
 export const update = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const updates = { ...req.body };
+    const { code, name, category, stock, minStock, price, currency } = req.body;
     
-    // Mapeo de camelCase a snake_case para PostgreSQL
-    if (updates.minStock !== undefined) {
-      updates.min_stock = updates.minStock;
-      delete updates.minStock;
-    }
-
-    if (updates.price !== undefined) {
-      updates.price_usd = updates.price;
-      delete updates.price;
-    }
+    // Construimos el objeto de actualización de forma segura para evitar NaN o undefined
+    const updates = {};
+    if (code !== undefined) updates.code = code;
+    if (name !== undefined) updates.name = name;
+    if (category !== undefined) updates.category = category;
+    if (currency !== undefined) updates.currency = currency || 'COP';
+    if (stock !== undefined) updates.stock = parseInt(stock) || 0;
+    if (minStock !== undefined) updates.min_stock = parseInt(minStock) || 0;
+    if (price !== undefined) updates.price_usd = parseFloat(price) || 0;
     
     updates.updated_at = new Date();
 

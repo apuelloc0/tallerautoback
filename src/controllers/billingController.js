@@ -15,7 +15,10 @@ export const listInvoices = async (req, res, next) => {
       .select('*, clients(*), service_orders(*)');
 
     // SEGURIDAD SaaS: Filtrar por taller
-    if (req.user.role !== 'SUPER_ADMIN') {
+    if (req.user.role === 'SUPER_ADMIN') {
+      const filterWsId = req.query.workshopId || req.query.workshop_id;
+      query = filterWsId ? query.eq('workshop_id', filterWsId) : query.is('workshop_id', null);
+    } else {
       query = query.eq('workshop_id', req.user.workshop_id);
     }
 
