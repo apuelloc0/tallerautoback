@@ -59,3 +59,5 @@ Sentry.setupExpressErrorHandler(app);
 
 app.use(notFound);
 app.use(errorHandler);
+
+export default app;
