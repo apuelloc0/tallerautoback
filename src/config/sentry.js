@@ -12,6 +12,9 @@ Sentry.init({
   integrations: [
     nodeProfilingIntegration(),
   ],
+  // Recomendado por Sentry para facilitar el debug inicial
+  sendDefaultPii: true,
+  debug: true, 
   tracesSampleRate: 1.0, // Ajustar en producción si hay mucho tráfico
   profilesSampleRate: 1.0,
 });

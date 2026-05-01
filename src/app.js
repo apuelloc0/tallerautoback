@@ -1,4 +1,4 @@
-import "./config/sentry.js"; // Creamos este archivo para mantener app.js limpio
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -45,17 +45,7 @@ app.get('/health', (req, res) => {
   res.json({ ok: true, message: 'API Taller Mecánico - Supabase' });
 });
 
-// Snippet de Sentry para verificar la integración
-app.get("/debug-sentry", function mainHandler(req, res) {
-  throw new Error("My first Sentry error!");
-});
-
 app.use('/api', limiter, apiRouter);
-
-// El manejador de errores de Sentry debe ir DESPUÉS de todas las rutas
-// y ANTES de tus otros middlewares de manejo de errores (notFound, errorHandler).
-import * as Sentry from "@sentry/node";
-Sentry.setupExpressErrorHandler(app);
 
 app.use(notFound);
 app.use(errorHandler);
