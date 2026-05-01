@@ -4,11 +4,39 @@ import jwt from 'jsonwebtoken';
 import { validateAndUseCode } from './invitationController.js';
 
 /**
+ * Helper para validar el token de Cloudflare Turnstile (Protección contra bots)
+ */
+const verifyBotProtection = async (token) => {
+  if (!token) return false;
+  try {
+    const formData = new URLSearchParams();
+    formData.append('secret', process.env.TURNSTILE_SECRET_KEY);
+    formData.append('response', token);
+
+    const result = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      body: formData,
+    });
+    const outcome = await result.json();
+    return outcome.success;
+  } catch (err) {
+    console.error('[SECURITY] Turnstile verification error:', err);
+    return false;
+  }
+};
+
+/**
  * Registro de un nuevo Dueño de Taller usando una Licencia SaaS.
  */
 export const registerWorkshopOwner = async (req, res, next) => {
   try {
-    const { username, password, full_name, workshop_name, license_code, security_questions } = req.body;
+    const { username, password, full_name, workshop_name, license_code, security_questions, captchaToken } = req.body;
+
+    // Validación de Bot en producción
+    if (process.env.NODE_ENV === 'production') {
+      const isHuman = await verifyBotProtection(captchaToken);
+      if (!isHuman) return res.status(400).json({ ok: false, message: 'Fallo en verificación de seguridad. Intente de nuevo.' });
+    }
 
     if (!license_code) {
       return res.status(400).json({ ok: false, message: 'Se requiere una licencia válida para registrar un taller.' });
@@ -111,7 +139,12 @@ export const registerWorkshopOwner = async (req, res, next) => {
  */
 export const registerEmployee = async (req, res, next) => {
   try {
-    const { username, password, full_name, join_code, security_questions } = req.body;
+    const { username, password, full_name, join_code, security_questions, captchaToken } = req.body;
+
+    if (process.env.NODE_ENV === 'production') {
+      const isHuman = await verifyBotProtection(captchaToken);
+      if (!isHuman) return res.status(400).json({ ok: false, message: 'Verificación de seguridad fallida.' });
+    }
 
     if (!join_code) {
       return res.status(400).json({ ok: false, message: 'Se requiere el código de taller para unirse.' });
@@ -180,7 +213,12 @@ export const register = async (req, res, next) => {
  */
 export const login = async (req, res, next) => {
   try {
-    const { username, password } = req.body;
+    const { username, password, captchaToken } = req.body;
+
+    if (process.env.NODE_ENV === 'production') {
+      const isHuman = await verifyBotProtection(captchaToken);
+      if (!isHuman) return res.status(400).json({ ok: false, message: 'Seguridad: Por favor verifique que no es un robot.' });
+    }
 
     // 1. Buscar usuario y unir con la tabla workshops para traer el join_code
     const { data: user, error } = await supabase
