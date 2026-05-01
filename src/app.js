@@ -54,9 +54,11 @@ app.use('/api', limiter, apiRouter);
 
 // El manejador de errores de Sentry debe ir ANTES de tus otros middlewares de error
 import * as Sentry from "@sentry/node";
-Sentry.setupExpressErrorHandler(app);
 
 app.use(notFound);
 app.use(errorHandler);
+
+// Sentry error handler debe ir después de todas las rutas y antes de otros manejadores de error
+Sentry.setupExpressErrorHandler(app);
 
 export default app;
