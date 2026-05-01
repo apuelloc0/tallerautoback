@@ -33,7 +33,7 @@ export const registerWorkshopOwner = async (req, res, next) => {
     const { username, password, full_name, workshop_name, license_code, security_questions, captchaToken } = req.body;
 
     // Validación de Bot en producción
-    if (process.env.NODE_ENV === 'production') {
+    if (process.env.NODE_ENV === 'production' && process.env.ENABLE_TURNSTILE === 'true') { // <-- CAMBIO AQUÍ
       const isHuman = await verifyBotProtection(captchaToken);
       if (!isHuman) return res.status(400).json({ ok: false, message: 'Fallo en verificación de seguridad. Intente de nuevo.' });
     }
@@ -141,7 +141,7 @@ export const registerEmployee = async (req, res, next) => {
   try {
     const { username, password, full_name, join_code, security_questions, captchaToken } = req.body;
 
-    if (process.env.NODE_ENV === 'production') {
+    if (process.env.NODE_ENV === 'production' && process.env.ENABLE_TURNSTILE === 'true') { // <-- CAMBIO AQUÍ
       const isHuman = await verifyBotProtection(captchaToken);
       if (!isHuman) return res.status(400).json({ ok: false, message: 'Verificación de seguridad fallida.' });
     }
@@ -215,7 +215,7 @@ export const login = async (req, res, next) => {
   try {
     const { username, password, captchaToken } = req.body;
 
-    if (process.env.NODE_ENV === 'production') {
+    if (process.env.NODE_ENV === 'production' && process.env.ENABLE_TURNSTILE === 'true') { // <-- CAMBIO AQUÍ
       const isHuman = await verifyBotProtection(captchaToken);
       if (!isHuman) return res.status(400).json({ ok: false, message: 'Seguridad: Por favor verifique que no es un robot.' });
     }
