@@ -1,3 +1,4 @@
+import "./config/sentry.js"; // Creamos este archivo para mantener app.js limpio
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -18,9 +19,10 @@ app.set('trust proxy', 1);
 
 app.use(helmet({ contentSecurityPolicy: false }));
 
-// Configuración de CORS flexible para fase de pruebas intensivas
+// Configuración de CORS restringida para producción
 app.use(cors({
-  origin: true, // Permite cualquier origen dinámicamente durante las pruebas
+  // Permite solo tu dominio de producción y localhost para desarrollo
+  origin: [process.env.FRONTEND_URL, 'http://localhost:5173', 'http://localhost:8080', 'https://tallerautofront.pages.dev'].filter(Boolean),
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -43,7 +45,16 @@ app.get('/health', (req, res) => {
   res.json({ ok: true, message: 'API Taller Mecánico - Supabase' });
 });
 
+// Snippet de Sentry para verificar la integración
+app.get("/debug-sentry", function mainHandler(req, res) {
+  throw new Error("My first Sentry error!");
+});
+
 app.use('/api', limiter, apiRouter);
+
+// El manejador de errores de Sentry debe ir ANTES de tus otros middlewares de error
+import * as Sentry from "@sentry/node";
+Sentry.setupExpressErrorHandler(app);
 
 app.use(notFound);
 app.use(errorHandler);
