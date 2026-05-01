@@ -161,6 +161,24 @@ export const registerEmployee = async (req, res, next) => {
       return res.status(404).json({ ok: false, message: 'Código de taller no válido.' });
     }
 
+    // 1.1 Validar límite global de usuarios (Lanzamiento: 15 usuarios por taller)
+    const MAX_USERS_LIMIT = 15;
+
+    const { count: userCount, error: countError } = await supabase
+      .from('users')
+      .select('*', { count: 'exact', head: true })
+      .eq('workshop_id', workshop.id)
+      .neq('role', 'ADMINISTRADOR');
+
+    if (countError) throw countError;
+
+    if (userCount >= MAX_USERS_LIMIT) {
+      return res.status(400).json({ 
+        ok: false, 
+        message: `El taller ${workshop.name} ha alcanzado el límite máximo de usuarios permitidos (${MAX_USERS_LIMIT}).` 
+      });
+    }
+
     // 2. Determinar el rol que IMPLICA el código de unión
     const determinedRole = join_code === workshop.join_code_tech ? 'TECNICO' : 'RECEPCIONISTA';
 

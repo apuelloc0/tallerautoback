@@ -50,7 +50,7 @@ export const createInvoice = async (req, res, next) => {
 
     // 2. Obtener configuración para el IVA
     // SEGURIDAD SaaS: Usar la tasa configurada en el taller del usuario, no una global con ID 1
-    const taxPercentage = req.user.tax_rate || 16;
+    const taxPercentage = Number(req.user.tax_rate || 16);
 
     // 3. Calcular totales
     const partsTotal = order.order_items.reduce((acc, item) => acc + (Number(item.price) * item.quantity), 0);

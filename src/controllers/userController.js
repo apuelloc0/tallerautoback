@@ -153,6 +153,22 @@ export const create = async (req, res, next) => {
       userData.workshop_id = req.user.workshop_id;
     }
 
+    // SEGURIDAD SaaS: Validar cuota de usuarios antes de crear
+    if (userData.workshop_id) {
+      // Límite unificado para el lanzamiento: 15 usuarios
+      const MAX_USERS_LIMIT = 15;
+
+      const { count } = await supabase
+        .from('users')
+        .select('*', { count: 'exact', head: true })
+        .eq('workshop_id', userData.workshop_id)
+        .neq('role', 'ADMINISTRADOR');
+
+      if (count >= MAX_USERS_LIMIT) {
+        return res.status(400).json({ ok: false, message: `Se ha alcanzado el límite de ${MAX_USERS_LIMIT} usuarios permitidos para este taller.` });
+      }
+    }
+
     if (userData.password) {
       userData.password = await bcrypt.hash(userData.password, 12);
     }
