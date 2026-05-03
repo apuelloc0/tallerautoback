@@ -25,6 +25,11 @@ const verifyBotProtection = async (token) => {
   }
 };
 
+const isValidEmail = (email) => {
+  const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return re.test(email);
+};
+
 /**
  * Registro de un nuevo Dueño de Taller usando una Licencia SaaS.
  */
@@ -32,10 +37,16 @@ export const registerWorkshopOwner = async (req, res, next) => {
   try {
     const { username, password, full_name, workshop_name, license_code, security_questions, captchaToken } = req.body;
 
+    const normalizedEmail = String(username || '').toLowerCase().trim();
+
     // Validación de Bot en producción
     if (process.env.NODE_ENV === 'production' && process.env.ENABLE_TURNSTILE === 'true') { // <-- CAMBIO AQUÍ
       const isHuman = await verifyBotProtection(captchaToken);
       if (!isHuman) return res.status(400).json({ ok: false, message: 'Fallo en verificación de seguridad. Intente de nuevo.' });
+    }
+
+    if (!isValidEmail(normalizedEmail)) {
+      return res.status(400).json({ ok: false, message: 'El correo electrónico no tiene un formato válido.' });
     }
 
     if (!license_code) {
@@ -108,7 +119,7 @@ export const registerWorkshopOwner = async (req, res, next) => {
     const { data: user, error: userError } = await supabase
       .from('users')
       .insert([{
-        username,
+        username: normalizedEmail,
         full_name,
         password: hashedPassword,
         role: 'ADMINISTRADOR', // El dueño es Admin de su taller
@@ -141,9 +152,15 @@ export const registerEmployee = async (req, res, next) => {
   try {
     const { username, password, full_name, join_code, security_questions, captchaToken } = req.body;
 
+    const normalizedEmail = String(username || '').toLowerCase().trim();
+
     if (process.env.NODE_ENV === 'production' && process.env.ENABLE_TURNSTILE === 'true') { // <-- CAMBIO AQUÍ
       const isHuman = await verifyBotProtection(captchaToken);
       if (!isHuman) return res.status(400).json({ ok: false, message: 'Verificación de seguridad fallida.' });
+    }
+
+    if (!isValidEmail(normalizedEmail)) {
+      return res.status(400).json({ ok: false, message: 'El correo electrónico no tiene un formato válido.' });
     }
 
     if (!join_code) {
@@ -187,7 +204,7 @@ export const registerEmployee = async (req, res, next) => {
     const { data: user, error: userError } = await supabase
       .from('users')
       .insert([{
-        username,
+        username: normalizedEmail,
         full_name,
         password: hashedPassword,
         role: determinedRole, // Usamos el rol determinado por el código
@@ -233,19 +250,21 @@ export const login = async (req, res, next) => {
   try {
     const { username, password, captchaToken } = req.body;
 
+    const normalizedEmail = String(username || '').toLowerCase().trim();
+
     if (process.env.NODE_ENV === 'production' && process.env.ENABLE_TURNSTILE === 'true') { // <-- CAMBIO AQUÍ
       const isHuman = await verifyBotProtection(captchaToken);
       if (!isHuman) return res.status(400).json({ ok: false, message: 'Seguridad: Por favor verifique que no es un robot.' });
     }
 
-    // 1. Buscar usuario y unir con la tabla workshops para traer el join_code
+    // 1. Buscar usuario (con email normalizado)
     const { data: user, error } = await supabase
       .from('users')
       .select(`
         *,
         workshops ( name, join_code_tech, join_code_recep, payment_status )
       `)
-      .eq('username', username)
+      .eq('username', normalizedEmail)
       .single();
 
     if (error || !user) {

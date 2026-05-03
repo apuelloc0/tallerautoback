@@ -21,8 +21,16 @@ app.use(helmet({ contentSecurityPolicy: false }));
 
 // Configuración de CORS restringida para producción
 app.use(cors({
-  // Permite solo tu dominio de producción y localhost para desarrollo
-  origin: [process.env.FRONTEND_URL, 'http://localhost:5173', 'http://localhost:8080', 'https://tallerautofront.pages.dev'].filter(Boolean),
+  origin: (origin, callback) => {
+    const allowedOrigins = [process.env.FRONTEND_URL, 'http://localhost:5173', 'http://localhost:8080', 'https://tallerautofront.pages.dev'].filter(Boolean);
+    
+    // Permitir: 1. Sin origen (Server-to-server) 2. Lista blanca 3. Subdominios de Cloudflare (.pages.dev)
+    if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.pages.dev')) {
+      callback(null, true);
+    } else {
+      callback(new Error('No permitido por CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
